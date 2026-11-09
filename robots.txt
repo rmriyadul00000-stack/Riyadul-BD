@@ -1,0 +1,8 @@
+User-agent: *
+Allow: /
+Disallow: /admin.html
+Disallow: /checkout.html
+Disallow: /account.html
+Disallow: /wishlist.html
+
+Sitemap: https://riyadulbd.com/sitemap.xml

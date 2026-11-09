@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Karla:wght@400;600;700&family=Hind+Siliguri:wght@400;600&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="icon" href="assets/img/logo.svg">
+  <title>Shop all organic food — Riyadul BD</title>
+  <meta name="description"
+    content="Browse organic vegetables, fruit, rice, oil, ghee, honey, dairy and spices. Filter by aisle, price and stock.">
+</head>
+
+<body data-page="products">
+  <div id="site-header"></div>
+  <div id="cat-hero"></div>
+  <main class="wrap section">
+    <div class="section-head">
+      <div>
+        <h1 style="font-size:clamp(1.8rem,4vw,2.5rem)" id="listing-title">The shop</h1>
+        <p id="listing-sub">Everything we have in right now. Stock changes as the farms deliver.</p>
+      </div>
+      <button class="btn btn-ghost btn-sm filter-toggle" id="filter-toggle">Filters</button>
+    </div>
+
+    <div class="listing">
+      <aside class="filters" id="filters">
+        <div class="filters-head">
+          <h4 class="filters-title">Filters</h4>
+          <button class="filters-close" id="filters-close" aria-label="Close filters">✕</button>
+        </div>
+        <div id="price-filter"><!-- built dynamically to match the real price range --></div>
+        <h4>Search</h4>
+        <div class="field" style="margin:0 0 6px"><input id="search-input" type="search" placeholder="Search products"
+            aria-label="Search products"></div>
+        <h4>Aisle</h4>
+        <div id="f-cats"></div>
+        <h4>Only show</h4>
+        <label><input type="checkbox" id="f-certified"> Certified organic</label>
+        <label><input type="checkbox" id="f-instock"> In stock</label>
+        <div class="filters-actions">
+          <button class="btn btn-ghost btn-sm" id="filters-reset">Reset</button>
+          <button class="btn btn-sm filters-apply" id="filters-apply">Show results</button>
+        </div>
+      </aside>
+      <div class="filters-backdrop" id="filters-backdrop"></div>
+
+      <section>
+        <div class="toolbar">
+          <span class="muted" id="count"></span>
+          <label>Sort
+            <select id="sort">
+              <option value="featured">Featured first</option>
+              <option value="price-asc">Price, low to high</option>
+              <option value="price-desc">Price, high to low</option>
+              <option value="discount">Biggest discount</option>
+              <option value="name">Name A–Z</option>
+            </select>
+          </label>
+        </div>
+        <div class="chips" id="chips"></div>
+        <div class="grid" id="grid"></div>
+      </section>
+    </div>
+  </main>
+  <section class="section site-policy" id="policy"></section>
+  <div id="site-footer"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2" defer></script>
+  <script src="js/data.js" defer></script>
+  <script src="js/supabase.js" defer></script>
+  <script src="js/core.js" defer></script>
+  <script src="js/pages.js" defer></script>
+  <script src="js/logo-apply.js" defer></script>
+</body>
+
+</html>

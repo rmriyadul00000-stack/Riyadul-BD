@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Riyadul BD — Admin</title>
+<meta name="robots" content="noindex, nofollow">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="CSS/admin.css">
+</head>
+<body class="admin">
+
+  <!-- ===================== SIGN-IN GATE ===================== -->
+  <div class="gate" id="gate">
+    <div class="gate-card">
+      <h1>Riyadul BD</h1>
+      <p id="gate-hint">Checking access…</p>
+      <form id="gate-form">
+        <div class="field" id="email-field">
+          <label for="g-email">Email</label>
+          <input id="g-email" type="email" autocomplete="username" placeholder="you@riyadulbd.com">
+        </div>
+        <div class="field">
+          <label for="g-pass">Password</label>
+          <input id="g-pass" type="password" autocomplete="current-password">
+        </div>
+        <p class="hide" id="gate-error" style="color:var(--a-red);font-size:.85rem;margin:0 0 12px"></p>
+        <button class="btn" type="submit" style="width:100%;justify-content:center">Sign in</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ===================== ADMIN SHELL ===================== -->
+  <div class="shell hide" id="shell">
+    <nav class="side" id="side"></nav>
+    <main class="main" id="view"></main>
+  </div>
+
+  <!-- ===================== MODAL ===================== -->
+  <div class="scrim" id="scrim"></div>
+  <div class="modal" id="modal" role="dialog" aria-modal="true">
+    <div class="modal-card">
+      <div class="modal-head">
+        <h2 id="modal-title" style="font-size:1.15rem"></h2>
+        <button class="x" id="modal-x" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body" id="modal-body"></div>
+      <div class="modal-foot" id="modal-foot"></div>
+    </div>
+  </div>
+
+  <div class="toasts" id="toasts"></div>
+
+  <script>window.RB_IS_ADMIN = true;</script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <script src="JS/supabase.js"></script>
+  <script src="JS/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,11 @@
+# secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# local
+.netlify/
+node_modules/
+.DS_Store

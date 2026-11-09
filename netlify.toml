@@ -1,0 +1,59 @@
+[build]
+  publish = "."
+  functions = "netlify/functions"
+
+# Clean URLs (rewrites, so the pretty URL stays in the address bar)
+[[redirects]]
+  from = "/products"
+  to = "/products.html"
+  status = 200
+[[redirects]]
+  from = "/product/:slug"
+  to = "/product.html?slug=:slug"
+  status = 200
+[[redirects]]
+  from = "/category/:cat"
+  to = "/products.html?cat=:cat"
+  status = 200
+[[redirects]]
+  from = "/checkout"
+  to = "/checkout.html"
+  status = 200
+[[redirects]]
+  from = "/account"
+  to = "/account.html"
+  status = 200
+[[redirects]]
+  from = "/wishlist"
+  to = "/wishlist.html"
+  status = 200
+[[redirects]]
+  from = "/contact"
+  to = "/contact.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "SAMEORIGIN"
+    Referrer-Policy = "strict-origin-when-cross-origin"
+    Permissions-Policy = "geolocation=(), microphone=(), camera=()"
+
+[[headers]]
+  for = "/admin.html"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
+
+[[headers]]
+  for = "/css/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+[[headers]]
+  for = "/js/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"
+[[headers]]
+  for = "/assets/*"
+  [headers.values]
+    Cache-Control = "public, max-age=2592000"
