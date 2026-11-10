@@ -1,19 +1,24 @@
 [build]
-  publish = "."
+  command = "npm run build"
+  publish = "dist"
   functions = "netlify/functions"
 
-# Clean URLs (rewrites, so the pretty URL stays in the address bar)
+[build.environment]
+  NODE_VERSION = "22"
+
+# Clean URLs (rewrites, so the pretty URL stays in the address bar).
+# The page reads the slug / category from the path — see RB.qs in src/shop/core.js.
 [[redirects]]
   from = "/products"
   to = "/products.html"
   status = 200
 [[redirects]]
   from = "/product/:slug"
-  to = "/product.html?slug=:slug"
+  to = "/product.html"
   status = 200
 [[redirects]]
   from = "/category/:cat"
-  to = "/products.html?cat=:cat"
+  to = "/products.html"
   status = 200
 [[redirects]]
   from = "/checkout"
@@ -31,6 +36,10 @@
   from = "/contact"
   to = "/contact.html"
   status = 200
+[[redirects]]
+  from = "/admin"
+  to = "/admin.html"
+  status = 200
 
 [[headers]]
   for = "/*"
@@ -44,15 +53,16 @@
   for = "/admin.html"
   [headers.values]
     X-Robots-Tag = "noindex, nofollow"
+[[headers]]
+  for = "/admin"
+  [headers.values]
+    X-Robots-Tag = "noindex, nofollow"
 
+# Vite fingerprints everything in /static, so it can be cached forever.
 [[headers]]
-  for = "/css/*"
+  for = "/static/*"
   [headers.values]
-    Cache-Control = "public, max-age=604800"
-[[headers]]
-  for = "/js/*"
-  [headers.values]
-    Cache-Control = "public, max-age=604800"
+    Cache-Control = "public, max-age=31536000, immutable"
 [[headers]]
   for = "/assets/*"
   [headers.values]

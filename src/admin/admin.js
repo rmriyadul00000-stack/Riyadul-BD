@@ -4,10 +4,16 @@
    row in the `admins` table. Nothing about who is an admin lives in
    this file.
 
-   While Supabase keys are blank (js/supabase.js) the panel runs on
-   local demo data behind a placeholder passcode, purely so the layout
-   can be reviewed before the project exists.
+   When the database is paused or not connected the panel opens in
+   PREVIEW: sample data kept in this browser, behind a placeholder
+   passcode, so the screens can be reviewed. Nothing in preview is real
+   and nothing is sent anywhere.
    ============================================================ */
+
+import { RB_DB, rbUnitCost, rbPromoState, rbEffPrice, rbResolveForShop, resetLocalData } from '../lib/db.js';
+import { forgetBackendProbe } from '../lib/backend';
+import { dashView } from './dashboard.js';
+import { initShell, setShellView, setShellCounts } from './shell.js';
 
 const DEMO_PASS = 'riyadul2026';
 const $ = (s, r) => (r || document).querySelector(s);
@@ -30,6 +36,13 @@ const ICON = {
   mail: '<rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="m4 7 8 6 8-6" stroke="currentColor" stroke-width="1.7" fill="none"/>',
   leaf: '<path d="M4 20c0-8 6-14 16-15 0 10-6 15-14 15" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/>',
   out: '<path d="M15 5V4a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-1" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M10 12h10m0 0-3-3m3 3-3 3" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  flame: '<path d="M12 3c1 3.5 5 5.2 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4.2.2 1.6 1 2.4 1.8 2.6C10.3 9 10.6 5.6 12 3Z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/>',
+  search: '<circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
+  menu: '<path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',
+  sun: '<circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
+  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/>',
+  ext: '<path d="M14 5h5v5M19 5l-8 8M11 6H6a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
+  refresh: '<path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
   chart: '<path d="M4 20V10M11 20V4M18 20v-7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>'
 };
 const svg = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[n] || ''}</svg>`;
@@ -38,9 +51,7 @@ const ORDER_STEPS = ['pending', 'confirmed', 'shipped', 'delivered'];
 const STATUSES = [...ORDER_STEPS, 'cancelled'];
 
 /* ===================== SMALL SHARED UTILITIES (v2) ===================== */
-const pct = n => (n == null || isNaN(n)) ? '—' : Math.round(n) + '%';
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
-const sameDayAB = (a, b) => a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
 
 /* effective discount % for a product: an explicit override wins, else it's
    worked out from the lowest-priced variant's Was vs Price */
@@ -93,26 +104,6 @@ function lineChart(points, labels, opts) {
   </svg>`;
 }
 
-/* small inline sparkline for KPI cards */
-function sparkline(points, w, h) {
-  w = w || 84; h = h || 32;
-  if (!points.length) return '';
-  const max = Math.max(1, ...points);
-  const stepX = points.length > 1 ? w / (points.length - 1) : 0;
-  const y = v => h - (v / max) * (h - 4) - 2;
-  const pts = points.map((v, i) => [i * stepX, y(v)]);
-  const line = pts.map((p, i) => (i ? 'L' : 'M') + p[0].toFixed(1) + ' ' + p[1].toFixed(1)).join(' ');
-  const fill = line + ` L${pts[pts.length - 1][0].toFixed(1)} ${h} L0 ${h} Z`;
-  return `<svg class="spark" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none"><path class="fill" d="${fill}"/><path class="line" d="${line}"/></svg>`;
-}
-
-function trendTag(curr, prev) {
-  if (!prev) return `<span class="trend flat">—</span>`;
-  const d = ((curr - prev) / prev) * 100;
-  if (Math.abs(d) < 1) return `<span class="trend flat">flat vs prior period</span>`;
-  return `<span class="trend ${d > 0 ? 'up' : 'down'}">${d > 0 ? '▲' : '▼'} ${Math.abs(d).toFixed(0)}% vs prior period</span>`;
-}
-
 function toast(msg, bad) {
   const t = document.createElement('div');
   t.className = 'toast' + (bad ? ' bad' : '');
@@ -125,6 +116,7 @@ function toast(msg, bad) {
 const modal = {
   open(title, bodyHtml, footHtml) {
     $('#modal-title').textContent = title;
+    $('#modal-body').onclick = null;
     $('#modal-body').innerHTML = bodyHtml;
     $('#modal-foot').innerHTML = footHtml || '';
     $('#modal').classList.add('on'); $('#scrim').classList.add('on');
@@ -153,10 +145,18 @@ function progressLine(status) {
 /* ===================== GATE ===================== */
 (async function gate() {
   const form = $('#gate-form'), err = $('#gate-error');
+  const mode = await RB_DB.ready;
 
-  if (!RB_DB.live) {
+  if (mode !== 'live') {
     $('#email-field').classList.add('hide');
-    $('#gate-hint').textContent = 'Supabase is not connected yet — local preview only. Passcode: ' + DEMO_PASS;
+    $('#gate-badge').textContent = 'Preview';
+    $('#gate-badge').classList.remove('hide');
+    $('#gate-hint').innerHTML = (mode === 'offline'
+      ? 'The database is paused or unreachable, so this is a <b>preview with sample data</b> kept in this browser. Real orders and customers return when the database is resumed.'
+      : 'No database is connected, so this is a <b>preview with sample data</b> kept in this browser.')
+      + '<br>Preview passcode: <code>' + DEMO_PASS + '</code>';
+    if (mode === 'offline') $('#gate-retry').classList.remove('hide');
+    $('#gate-retry').onclick = () => { forgetBackendProbe(); location.reload(); };
     if (sessionStorage.getItem('rb.admin') === 'ok') return boot({ email: 'preview' });
     form.onsubmit = e => {
       e.preventDefault();
@@ -188,73 +188,89 @@ function progressLine(status) {
 
 const NAV_GROUPS = [
   { label: 'Overview', items: [['dash', 'Dashboard', 'home']] },
-  { label: 'Sales', items: [['orders', 'Orders', 'cart'], ['customers', 'Customers', 'users']] },
+  { label: 'Sales', items: [['orders', 'Orders', 'cart'], ['customers', 'Customers', 'users'], ['messages', 'Messages', 'mail']] },
   { label: 'Catalog', items: [['products', 'Products', 'box'], ['categories', 'Categories', 'tag'],
-      ['hotdeals', 'Hot Deals', 'ticket'], ['inventory', 'Inventory', 'chart']] },
-  { label: 'Content', items: [['hero', 'Hero slides', 'image'], ['coupons', 'Discount codes', 'ticket'],
-      ['messages', 'Messages', 'mail']] },
-  { label: 'System', items: [['settings', 'Settings', 'gear']] }
+      ['inventory', 'Inventory', 'chart'], ['hotdeals', 'Hot Deals', 'flame'], ['coupons', 'Discount codes', 'ticket']] },
+  { label: 'Storefront', items: [['hero', 'Hero slides', 'image'], ['settings', 'Settings', 'gear']] }
 ];
 const NAV_KEYS = NAV_GROUPS.flatMap(g => g.items.map(([k]) => k));
+const NAV_LABEL = Object.fromEntries(NAV_GROUPS.flatMap(g => g.items.map(([k, l]) => [k, l])));
+
+function signOut() {
+  sessionStorage.removeItem('rb.admin');
+  RB_DB.logout().then(() => location.reload());
+}
 
 function boot(admin) {
   window.RB_ADMIN = admin;
   $('#gate').classList.add('hide');
   $('#shell').classList.remove('hide');
-  renderSide();
+  initShell({
+    groups: NAV_GROUPS, labels: NAV_LABEL, svg, esc, admin, mode: RB_DB.mode, go, signOut, toast,
+    search: globalSearch,
+    resetPreview: () => { resetLocalData(); location.reload(); },
+    retryBackend: () => { forgetBackendProbe(); location.reload(); }
+  });
   /* Reload (or a bookmarked/shared link) should land back on whichever
      page was open, not always Dashboard — the page key lives in the URL
      hash, restored here, kept in sync by go() below. */
   const hashKey = location.hash.slice(1);
   go(NAV_KEYS.includes(hashKey) ? hashKey : 'dash');
   refreshSideCounts();
+  window.addEventListener('hashchange', () => {
+    const k = location.hash.slice(1);
+    if (NAV_KEYS.includes(k) && k !== window.RB_CURRENT_VIEW) go(k);
+  });
 }
 
-function renderSide(counts) {
-  counts = counts || {};
-  $('#side').innerHTML = `
-    <div class="mark">${svg('leaf')}<span><b>Riyadul BD</b><small>ADMIN</small></span></div>
-    ${NAV_GROUPS.map(g => `<div class="group-label">${g.label}</div>${g.items.map(([k, label, icon]) => {
-      const n = counts[k];
-      return `<button data-nav="${k}">${svg(icon)}${label}${n ? `<span class="count">${n}</span>` : ''}</button>`;
-    }).join('')}`).join('')}
-    <div class="spacer"></div>
-    <div class="mode">${RB_DB.live
-      ? 'Signed in as ' + esc((window.RB_ADMIN || {}).email || '')
-      : 'Local preview. Add your Supabase keys in js/supabase.js to go live.'}</div>
-    <button data-nav="signout">${svg('out')}Sign out</button>`;
-
-  $('#side').onclick = e => {
-    const b = e.target.closest('[data-nav]'); if (!b) return;
-    if (b.dataset.nav === 'signout') {
-      sessionStorage.removeItem('rb.admin'); RB_DB.logout().then(() => location.reload()); return;
-    }
-    go(b.dataset.nav);
-  };
-}
-
-/* small badge counts next to nav items — pending orders and stock alerts
-   are the two things an admin should notice before clicking in */
+/* badge counts next to nav items — the three things an admin should
+   notice before clicking in: orders waiting, unread messages, stock alerts */
 async function refreshSideCounts() {
   try {
-    const [or_, pr, sr] = await Promise.all([RB_DB.allOrders(), RB_DB.products(true), RB_DB.settings()]);
+    const [or_, pr, sr, mr] = await Promise.all([RB_DB.allOrders(), RB_DB.products(true), RB_DB.settings(), RB_DB.messages()]);
     const orders = or_.data || [], products = pr.data || [];
     const threshold = Number((sr.data || {}).low_stock_threshold || 5);
-    const stockOf = p => (p.variants || []).reduce((s, v) => s + (v.stock || 0), 0);
-    const pending = orders.filter(o => o.status === 'pending').length;
-    const alerts = products.filter(p => stockOf(p) <= threshold).length;
-    renderSide({ orders: pending || null, inventory: alerts || null });
-    $$('#side [data-nav]').forEach(x => x.classList.toggle('on', x.dataset.nav === (window.RB_CURRENT_VIEW || 'dash')));
+    const stockOf = p => (p.variants || []).reduce((s, v) => s + (Number(v.stock) || 0), 0);
+    setShellCounts({
+      orders: orders.filter(o => o.status === 'pending').length,
+      inventory: products.filter(p => stockOf(p) <= threshold).length,
+      messages: (mr.data || []).filter(m => m.sender !== 'admin' && !m.read_by_admin).length
+    });
   } catch {}
+}
+
+/* one search box for the whole panel: pages, orders, customers, products */
+let searchCache = null;
+async function globalSearch(q) {
+  if (!searchCache || Date.now() - searchCache.at > 30000) {
+    const [or_, cr, pr] = await Promise.all([RB_DB.allOrders(), RB_DB.customers(), RB_DB.products(true)]);
+    searchCache = { at: Date.now(), orders: or_.data || [], customers: cr.data || [], products: pr.data || [] };
+  }
+  const s = q.trim().toLowerCase(), has = (...v) => v.some(x => String(x || '').toLowerCase().includes(s));
+  const out = NAV_KEYS.filter(k => !s || NAV_LABEL[k].toLowerCase().includes(s))
+    .map(k => ({ group: 'Pages', title: NAV_LABEL[k], run: () => go(k) }));
+  if (s.length < 2) return out;
+  searchCache.orders.filter(o => has(o.order_code, o.contact_name, o.contact_phone, o.contact_email)).slice(0, 6)
+    .forEach(o => out.push({ group: 'Orders', title: o.order_code + ' · ' + o.contact_name, sub: money(o.total) + ' · ' + o.status, run: () => go('orders', { openOrder: o.id }) }));
+  searchCache.customers.filter(c => has(c.customer_code, c.full_name, c.email, c.phone)).slice(0, 5)
+    .forEach(c => out.push({ group: 'Customers', title: (c.full_name || c.email || 'Customer') + ' · ' + c.customer_code, sub: c.phone || c.email || '', run: () => go('customers', { openCustomer: c.id }) }));
+  searchCache.products.filter(p => has(p.name, p.name_bn, p.sku, p.farm)).slice(0, 6)
+    .forEach(p => out.push({ group: 'Products', title: p.name, sub: (p.sku || '') + ' · ' + money(minEffPrice(p)), run: () => openItem(p.id) }));
+  return out;
 }
 
 function go(key, arg) {
   if (window.RB_POLL_TIMER) { clearInterval(window.RB_POLL_TIMER); window.RB_POLL_TIMER = null; }
+  if (!views[key]) key = 'dash';
   window.RB_CURRENT_VIEW = key;
   try { history.replaceState(null, '', '#' + key); } catch {}
-  $$('#side button').forEach(x => x.classList.toggle('on', x.dataset.nav === key));
+  setShellView(key);
+  /* a view's delegated handlers must not outlive it */
+  const view = $('#view');
+  view.onclick = null; view.onchange = null; view.oninput = null;
   Promise.resolve()
-    .then(() => (views[key] || views.dash)(arg))
+    .then(() => views[key](arg))
+    .then(() => { if (key !== 'dash') refreshSideCounts(); })
     .catch(err => {
       console.error('View failed to load:', key, err);
       $('#view').innerHTML = `<div class="bar"><div><h1>Couldn't load this page</h1>
@@ -269,202 +285,11 @@ window.rbGo = go;
 /* ===================== VIEWS ===================== */
 const views = {};
 
-/* ---------- dashboard ---------- */
-views.dash = async function () {
-  const view = $('#view');
-  view.innerHTML = `<div class="bar"><div><h1>Dashboard</h1><p>Loading…</p></div></div>`;
-  const [biz, cr] = await Promise.all([loadBiz(), RB_DB.customers()]);
-  const { products, orders } = biz;
-  const customers = cr.data || [];
-  const settings = (await RB_DB.settings()).data || {};
-  const threshold = Number(settings.low_stock_threshold || 5);
-
-  const stockOf = p => (p.variants || []).reduce((s, v) => s + (Number(v.stock) || 0), 0);
-  const low = products.filter(p => stockOf(p) > 0 && stockOf(p) <= threshold);
-  const outOf = products.filter(p => stockOf(p) === 0);
-  const todayRevenue = orders
-    .filter(o => o.status !== 'cancelled' && sameDayAB(new Date(o.placed_at), new Date()))
-    .reduce((s, o) => s + Number(o.total || 0), 0);
-
-  const state = { range: '30d', from: '', to: '' };
-  const rangeLabel = { all: 'all time', today: 'today', '7d': 'the last 7 days', '30d': 'the last 30 days', month: 'this month', custom: 'the selected dates' };
-  const RANGES = [['today', 'Today'], ['7d', '7 days'], ['30d', '30 days'], ['month', 'This month'], ['all', 'All time'], ['custom', 'Custom']];
-
-  function windowFor(range) {
-    const now = new Date();
-    if (range === 'today') return [new Date(now.getFullYear(), now.getMonth(), now.getDate()), now];
-    if (range === '7d') return [new Date(Date.now() - 7 * 864e5), now];
-    if (range === '30d') return [new Date(Date.now() - 30 * 864e5), now];
-    if (range === 'month') return [new Date(now.getFullYear(), now.getMonth(), 1), now];
-    if (range === 'custom' && state.from && state.to) return [new Date(state.from), new Date(state.to + 'T23:59:59')];
-    return [null, null];
-  }
-
-  function inWin(o, from, to) {
-    if (!from) return true;
-    const d = new Date(o.placed_at);
-    return d >= from && d <= to;
-  }
-
-  function paint() {
-    const [from, to] = windowFor(state.range);
-    const filtered = orders.filter(o => inWin(o, from, to));
-    const revenue = filtered.filter(o => o.status !== 'cancelled').reduce((s, o) => s + Number(o.total || 0), 0);
-    const pending = filtered.filter(o => o.status === 'pending').length;
-    const guests = filtered.filter(o => o.is_guest).length;
-    const aov = filtered.length ? revenue / filtered.filter(o => o.status !== 'cancelled').length || 0 : 0;
-    const A = analyze(biz, from ? { from, to } : null), T = A.tot;
-
-    /* previous equal-length period, for trend arrows */
-    let prevRevenue = null, prevOrders = null, prevNet = null;
-    if (from) {
-      const span = to - from;
-      const pFrom = new Date(from.getTime() - span), pTo = new Date(from.getTime());
-      const prevFiltered = orders.filter(o => inWin(o, pFrom, pTo));
-      prevRevenue = prevFiltered.filter(o => o.status !== 'cancelled').reduce((s, o) => s + Number(o.total || 0), 0);
-      prevOrders = prevFiltered.length;
-      prevNet = analyze(biz, { from: pFrom, to: pTo }).tot.net;
-    }
-
-    /* daily revenue series for the line chart — last 14 buckets within range, or last 14 days if 'all' */
-    const days = 14;
-    const end = to || new Date();
-    const series = [], seriesLabels = [];
-    for (let i = days - 1; i >= 0; i--) {
-      const dayStart = new Date(end.getFullYear(), end.getMonth(), end.getDate() - i);
-      const dayEnd = new Date(dayStart.getFullYear(), dayStart.getMonth(), dayStart.getDate(), 23, 59, 59);
-      const dayRev = orders.filter(o => o.status !== 'cancelled' && new Date(o.placed_at) >= dayStart && new Date(o.placed_at) <= dayEnd)
-        .reduce((s, o) => s + Number(o.total || 0), 0);
-      series.push(dayRev);
-      seriesLabels.push(dayStart.toLocaleDateString('en-GB', { day: 'numeric', month: 'short' }));
-    }
-
-    /* order-status breakdown as horizontal bars */
-    const statusCounts = STATUSES.map(s => ({ s, n: filtered.filter(o => o.status === s).length }));
-    const maxStatus = Math.max(1, ...statusCounts.map(x => x.n));
-
-    /* top products by revenue within range */
-    const revByProduct = {};
-    filtered.forEach(o => (o.items || []).forEach(i => {
-      revByProduct[i.product_name] = (revByProduct[i.product_name] || 0) + i.unit_price * i.qty;
-    }));
-    const topProducts = Object.entries(revByProduct).sort((a, b) => b[1] - a[1]).slice(0, 5);
-    const maxTop = Math.max(1, ...topProducts.map(x => x[1]));
-
-    view.innerHTML = `
-    <div class="bar">
-      <div><h1>Dashboard</h1><p>Showing ${rangeLabel[state.range]}. Refreshed each time you open this page.</p></div>
-      <div class="bar-actions">
-        <div class="seg" id="dash-range">${RANGES.map(([k, l]) => `<button data-r="${k}" class="${state.range === k ? 'on' : ''}">${l}</button>`).join('')}</div>
-        ${state.range === 'custom' ? `
-          <input type="date" id="dash-from" value="${state.from}">
-          <input type="date" id="dash-to" value="${state.to}">` : ''}
-        <a class="btn ghost sm" href="index.html" target="_blank" rel="noopener">View store ↗</a>
-      </div>
-    </div>
-    ${upgradeBanner(biz)}
-    <div class="stats v2">
-      <div class="stat v2"><span>Revenue</span><b>${money(revenue)}</b>${trendTag(revenue, prevRevenue)}</div>
-      <div class="stat v2"><span>Orders</span><b>${filtered.length}</b>${trendTag(filtered.length, prevOrders)}${sparkline(series)}</div>
-      <div class="stat v2"><span>Average order value</span><b>${money(aov)}</b><i>${rangeLabel[state.range]}</i></div>
-      <div class="stat v2"><span>Today's revenue</span><b>${money(todayRevenue)}</b><i>as of ${whenFull(new Date())}</i></div>
-      <div class="stat v2"><span>Waiting on you</span><b>${pending}</b><i>pending in this range</i></div>
-      <div class="stat v2"><span>Customers</span><b>${customers.length}</b><i>${guests} guest order${guests === 1 ? '' : 's'} in range</i></div>
-    </div>
-
-    <div class="card" style="margin-bottom:18px">
-      <h3>Profit &amp; loss — actual vs potential</h3>
-      <p class="sub" style="margin:-4px 0 12px">Actual is delivered orders in ${rangeLabel[state.range]}, buying cost included. Potential is what's sitting in stock right now, at today's cost and price.</p>
-      <div class="pl-split">
-        <div class="pl-col">
-          <h4>Actual (realized)</h4>
-          <div class="kv"><div><span>Revenue</span><b>${moneyD(T.revenue)}</b></div>
-            <div><span>Cost of goods sold</span><b>${moneyD(T.cogs)}</b></div>
-            <div><span>Gross profit</span>${profitTxt(T.gross)}</div>
-            <div><span>Wastage &amp; expenses</span><b class="${T.waste + T.expenses ? 'neg' : ''}">${moneyD(T.waste + T.expenses)}</b></div>
-            <div><span>Coupons given</span><b class="${T.coupons ? 'neg' : ''}">${moneyD(T.coupons)}</b></div>
-            <div><span>Net profit</span>${profitTxt(T.net)}</div></div>
-          ${prevNet != null ? trendTag(T.net, prevNet) : ''}
-        </div>
-        <div class="pl-col">
-          <h4>Potential (from current stock)</h4>
-          <div class="kv"><div><span>Stock value at cost</span><b>${moneyD(T.stockCost)}</b></div>
-            <div><span>Stock value at price</span><b>${moneyD(T.stockValue)}</b></div>
-            <div><span>Potential profit</span>${profitTxt(T.potential)}</div>
-            <div><span>Orders in transit</span><b>${T.pUnits} unit(s)</b></div>
-            <div><span>Profit once delivered</span>${profitTxt(T.pGross)}</div></div>
-        </div>
-      </div>
-      <a href="#" data-go-inventory class="link-btn" style="margin-top:10px;display:inline-block">See it broken down by item and aisle →</a>
-    </div>
-
-    <div class="chartgrid">
-      <div class="card chartcard">
-        <h3>Revenue — last 14 days</h3>
-        <p class="sub">Cancelled orders excluded.</p>
-        ${lineChart(series, seriesLabels, { w: 640, h: 190 })}
-      </div>
-      <div class="card chartcard">
-        <h3>Orders by status</h3>
-        <p class="sub">In the selected range.</p>
-        <div class="bars">${statusCounts.map(x => `
-          <div class="bar-row"><span style="text-transform:capitalize">${x.s}</span>
-            <div class="track"><div class="fill" style="width:${(x.n / maxStatus * 100).toFixed(0)}%;${x.s === 'cancelled' ? 'background:var(--a-red)' : ''}"></div></div>
-            <b>${x.n}</b></div>`).join('')}</div>
-      </div>
-    </div>
-
-    <div class="grid2">
-      <div class="card">
-        <h3>Latest orders</h3>
-        ${filtered.length ? `<div class="tablewrap" style="border:0;margin-top:10px"><table>
-          <thead><tr><th>Order</th><th>Customer</th><th>Total</th><th>Status</th></tr></thead>
-          <tbody>${filtered.slice(0, 7).map(o => `<tr class="clickrow" data-order="${o.id}">
-            <td><b>${esc(o.order_code)}</b><br><small style="color:var(--a-mute)">${whenFull(o.placed_at)}</small></td>
-            <td>${esc(o.contact_name)}<br>${customerTag(o)}</td>
-            <td>${money(o.total)}</td>
-            <td><span class="pill ${esc(o.status)}">${esc(o.status)}</span></td></tr>`).join('')}
-          </tbody></table></div>` : '<div class="empty">No orders in this range.</div>'}
-      </div>
-      <div class="card">
-        <h3>Top products by revenue</h3>
-        <p class="sub" style="margin:-4px 0 10px">In the selected range.</p>
-        ${topProducts.length ? `<div class="bars">${topProducts.map(([name, rev]) => `
-          <div class="bar-row"><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(name)}">${esc(name)}</span>
-            <div class="track"><div class="fill" style="width:${(rev / maxTop * 100).toFixed(0)}%"></div></div>
-            <b>${money(rev)}</b></div>`).join('')}</div>` : '<div class="empty">No sales in this range yet.</div>'}
-      </div>
-    </div>
-
-    <div class="card" style="margin-top:14px">
-      <h3>Stock that needs attention</h3>
-      <p class="sub" style="margin:-4px 0 10px">Products at ${threshold} units or fewer. Click one for cost, notes and history.</p>
-      ${(low.length || outOf.length) ? `<div class="tablewrap" style="border:0"><table>
-        <thead><tr><th>Product</th><th>Units left</th></tr></thead>
-        <tbody>${[...outOf, ...low].slice(0, 8).map(p => `<tr>
-          <td><a href="#" class="item-link" data-item="${p.id}">${esc(p.name)}</a><br><small style="color:var(--a-mute)">${esc(p.origin || '')}</small></td>
-          <td><span class="pill ${stockOf(p) === 0 ? 'zero' : 'low'}">${stockOf(p) === 0 ? 'Out of stock' : stockOf(p) + ' Units Left'}</span></td></tr>`).join('')}
-        </tbody></table></div>` : '<div class="empty">Every product is well stocked.</div>'}
-    </div>`;
-
-    $('#dash-range').onclick = e => {
-      const b = e.target.closest('[data-r]'); if (!b) return;
-      state.range = b.dataset.r; paint();
-    };
-    const from_ = $('#dash-from'), to_ = $('#dash-to');
-    if (from_) from_.onchange = e => { state.from = e.target.value; paint(); };
-    if (to_) to_.onchange = e => { state.to = e.target.value; paint(); };
-
-    view.onclick = e => {
-      const it = e.target.closest('[data-item]');
-      if (it) { e.preventDefault(); return openItem(it.dataset.item, { onChange: () => { if (window.RB_CURRENT_VIEW === 'dash') go('dash'); } }); }
-      const row = e.target.closest('[data-order]');
-      if (row) go('orders', { openOrder: row.dataset.order });
-      if (e.target.closest('[data-go-inventory]')) { e.preventDefault(); go('inventory'); }
-    };
-  }
-  paint();
-};
+/* ---------- dashboard (see dashboard.js) ---------- */
+views.dash = () => dashView({
+  $, esc, money, moneyD, whenFull, svg, go, openItem, loadBiz, analyze, upgradeBanner, customerTag,
+  STATUSES, ORDER_STEPS, setCounts: setShellCounts
+});
 
 const customerTag = o => o.is_guest
   ? '<span class="pill guest">GUEST</span>'
@@ -475,7 +300,7 @@ views.orders = async function (opts) {
   const view = $('#view');
   view.innerHTML = `<div class="bar"><div><h1>Orders</h1><p>Loading…</p></div></div>`;
   let orders = (await RB_DB.allOrders(opts && opts.customerId)).data || [];
-  let status = '', kind = '', q = (opts && opts.q) || '';
+  let status = (opts && opts.status) || '', kind = '', q = (opts && opts.q) || '';
   let sortKey = 'placed_at', sortDir = -1;
   const selected = new Set();
 
@@ -778,10 +603,10 @@ async function openCustomer(c) {
     toast(r.ok ? 'Customer updated.' : r.error, !r.ok);
     if (r.ok) { modal.close(); go('customers'); }
   };
-  $('#modal-body').addEventListener('click', e => {
+  $('#modal-body').onclick = e => {
     const row = e.target.closest('[data-order]');
     if (row) { modal.close(); go('orders', { openOrder: row.dataset.order }); }
-  });
+  };
 }
 
 /* ---------- products ---------- */
@@ -1213,10 +1038,10 @@ views.categories = async function () {
   }
   paint();
 
-  view.addEventListener('click', e => {
+  view.onclick = e => {
     const b = e.target.closest('[data-cat]');
     if (b) { e.preventDefault(); openCategory(b.dataset.cat, { onChange: async () => { if (window.RB_CURRENT_VIEW !== 'categories') return; products.splice(0); products.push(...(await RB_DB.products(true)).data || []); paint(); } }); }
-  });
+  };
 
   function edit(c) {
     const isNew = !c;
@@ -1418,7 +1243,7 @@ async function loadBiz() {
   };
 }
 const upgradeBanner = biz => biz.needsUpgrade ? `
-  <div class="notice"><b>One-time database step needed.</b> Run <code>02-upgrade.sql</code> in the Supabase SQL editor to switch on
+  <div class="notice"><b>One-time database step needed.</b> Run <code>sql/pending/2026-11-10_run_when_supabase_resumes.sql</code> in the Supabase SQL editor to switch on
   cost history, wastage, expenses and real profit tracking. Until then this page shows costs and stock but no history.</div>` : '';
 
 /* range = { from: Date|null, to: Date|null } applies to sales, wastage and expenses.
@@ -1641,7 +1466,7 @@ async function openItem(productId, opts) {
   }
 
   function historyTable(logs, biz) {
-    if (biz.needsUpgrade) return '<div class="empty">History is switched on by running 02-upgrade.sql.</div>';
+    if (biz.needsUpgrade) return '<div class="empty">History is switched on by running the file in sql/pending/.</div>';
     if (!logs.length) return '<div class="empty">Nothing recorded yet.</div>';
     return `<div class="tablewrap"><table><thead><tr><th>When</th><th>Type</th><th>Size</th><th>Qty</th><th>Amount</th><th>Note</th></tr></thead><tbody>
       ${logs.slice(0, 200).map(l => `<tr><td>${whenFull(l.created_at)}</td>
@@ -1657,7 +1482,7 @@ async function openItem(productId, opts) {
     if (!r.ok) { toast(r.error, true); return false; }
     state.changed = true; return true;
   }
-  async function logIt(entry) { const r = await RB_DB.addInventoryLog({ product_id: productId, ...entry }); if (!r.ok && !state.warned) { state.warned = true; toast('Saved, but history could not be written (run 02-upgrade.sql).', true); } }
+  async function logIt(entry) { const r = await RB_DB.addInventoryLog({ product_id: productId, ...entry }); if (!r.ok && !state.warned) { state.warned = true; toast('Saved, but history could not be written (run the file in sql/pending/).', true); } }
 
   function bindTab(tab, p, biz, logs) {
     if (tab === 'costs') {
@@ -1862,7 +1687,7 @@ views.hotdeals = async function () {
     $('#hd-chips').innerHTML = CHIPS.map(([k, l]) => `<button class="chip ${status === k ? 'on' : ''}" data-s="${k}">${l}</button>`).join('');
     const list = visible(), Lids = L.map(p => p.id);
     $('#hd-rows').innerHTML = list.length ? list.map(p => {
-      const li = Lids.indexOf(p.id), resolved = rbResolveForShop(p), d = discNow(p), stock = stockOf(p);
+      const li = Lids.indexOf(p.id), d = discNow(p), stock = stockOf(p);
       const now = minEffPrice(p), def = minDefPrice(p);
       return `<tr>
         <td class="chkcol"><input type="checkbox" class="rowchk" data-id="${p.id}" ${selected.has(p.id) ? 'checked' : ''}></td>
@@ -2113,7 +1938,7 @@ views.inventory = async function () {
       const it = e.target.closest('[data-item]');
       if (it) { e.preventDefault(); openItem(it.dataset.item, { tab: it.dataset.tab, onChange: reload }); }
     };
-    $('#iv-body').addEventListener('change', async e => {
+    $('#iv-body').onchange = async e => {
       const chk = e.target.closest('.rowchk');
       if (chk) { if (chk.checked) selected.add(chk.dataset.key); else selected.delete(chk.dataset.key); updateBulk(); return; }
       const inp = e.target.closest('.inv-stock'); if (!inp) return;
@@ -2125,7 +1950,7 @@ views.inventory = async function () {
       if (!r.ok) return toast(r.error, true);
       await RB_DB.addInventoryLog({ product_id: p.id, variant_label: p.variants[vi].label, kind: 'adjustment', qty: after - before, note: 'Edited in inventory table' });
       toast('Stock saved.'); reload();
-    });
+    };
     $('#iv-all').onchange = e => { if (e.target.checked) rows.forEach(r => selected.add(r.key)); else selected.clear(); paintItems(A); };
     $('#iv-clear').onclick = () => { selected.clear(); paintItems(A); };
     $('#iv-adj-go').onclick = async () => {
@@ -2193,7 +2018,7 @@ views.inventory = async function () {
           <td>${whenFull(l.created_at)}</td><td><a href="#" class="item-link" data-item="${l.product_id}" data-tab="stock">${esc(pName(l.product_id))}</a></td>
           <td>${esc(l.variant_label || '—')}</td><td><span class="pill ${LOG_PILL[l.kind] || ''}">${LOG_LABEL[l.kind] || l.kind}</span></td>
           <td>${l.qty || ''}</td><td>${l.amount ? moneyD(l.amount) : ''}</td><td>${esc(l.note || '')}</td><td><small class="a-mute">${esc(l.created_by || '')}</small></td></tr>`).join('')
-          : `<tr><td colspan="8"><div class="empty">${biz.needsUpgrade ? 'Run 02-upgrade.sql to start recording history.' : 'No activity recorded yet.'}</div></td></tr>`}</tbody></table></div>
+          : `<tr><td colspan="8"><div class="empty">${biz.needsUpgrade ? 'Run the file in sql/pending/ to start recording history.' : 'No activity recorded yet.'}</div></td></tr>`}</tbody></table></div>
       ${list.length > 400 ? `<p class="hint">Showing the latest 400 of ${list.length}. Export for the full list.</p>` : ''}`;
     $('#lg-q').oninput = e => { S.logQ = e.target.value; const pos = e.target.selectionStart; paintLog(); const el = $('#lg-q'); el.focus(); el.setSelectionRange(pos, pos); };
     $('#lg-kind').onchange = e => { S.kind = e.target.value; paintLog(); };

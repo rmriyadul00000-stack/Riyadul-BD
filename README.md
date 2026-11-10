@@ -1,89 +1,67 @@
 # Riyadul BD — organic food storefront
 
-**Already have a live Supabase project?** Run these once, in order, in the SQL editor —
-each is additive only and safe on your existing data:
-1. `sql/03-migration-v2.sql` — category banners, announcement bar/logo settings
-2. `sql/04-hotdeals-migration.sql` — Hot Deals flag/order on products
-3. `sql/05-sku-discount-logo-migration.sql` — unique product SKU, discount-badge
-   override, admin-configurable logo height
+Storefront and admin panel for an organic grocery in Dhaka. Supabase (Postgres, Auth,
+Storage) is the back end; the front end is a Vite multi-page app.
 
-A fresh install just runs `01-schema.sql` then `02-seed.sql`; both already include
-everything `03`, `04` and `05` add.
+## Stack
 
-**What changed in this update:**
-- Fixed the bug where changing a product's category reverted after refresh — the save
-  now always resolves and writes the correct `category_id` alongside the slug.
-- Header: topbar removed, logo-only branding, `.hdr-main` stays visible on scroll
-  (`position:sticky`, correct `z-index`), a mobile hamburger menu and a sticky mobile
-  back button.
-- Hero: desktop and mobile slides now render side by side and CSS alone decides which
-  one shows, so resizing the browser always shows exactly one — with mouse-drag, touch
-  swipe and Prev/Next controls.
-- Quick Navigation (desktop): mouse-draggable, Prev/Next buttons that cycle
-  continuously; mobile version untouched as required.
-- Category browsing: clicking a category or "See All" opens a real category page
-  (`products.html?cat=...`) with its own banner and name — no more homepage scrolling.
-  Desktop category rows are mouse-draggable with Prev/Next; mobile shows a 2-column
-  grid with a dynamic "View More (shown/total)" button.
-- New **Hot Deals** section (replaces "Shop all" in the nav, colour `#17402A`), fully
-  managed from the admin panel: add, reorder, remove and rename.
-- Product card redesigned: bigger image, a basket-icon button instead of a text button.
-- Admin: "Stock that needs attention" now triggers at 5 units or fewer, labelled
-  "Units Left" / "Out of stock".
-- Trust bar + a Policy section (replacing "How an order reaches you") on the homepage,
-  category pages and product pages; a clickable contact block at the bottom of the
-  homepage.
-- Sign-out requires a second tap to confirm; mobile filters open in a proper drawer.
+| Layer | What |
+|---|---|
+| Build | Vite 6, ES modules, TypeScript (`tsc --noEmit` runs before every build) |
+| Data | `@supabase/supabase-js` v2 from npm, wrapped by `src/lib/db.js` |
+| Tests | Vitest (`tests/`), ESLint |
+| Hosting | Netlify — `npm run build`, publishes `dist/`, one function for order email |
 
-**Second update:**
-- Every product now has a unique, human-readable SKU (`P-1001…`), auto-assigned by
-  the database, shown in the admin product list/editor, and searchable in Products,
-  Hot Deals and Inventory.
-- "See All" now shows on mobile category banners too.
-- Storefront filters: dropped the farm-name search, added a proper expandable price
-  range (dual slider + step buttons), kept at the top of the filter list.
-- Logo height is now admin-configurable (works with square or tall 9:16 files);
-  saving it re-checks the admin's password first.
-- Discount badges can be manually overridden per product from the admin panel
-  (blank still means "calculate automatically from Was/Price").
-- The wishlist heart moved to the top-right corner of the product photo on the
-  product detail page.
-- The mobile back button now tracks the real path taken through the site (not just
-  `history.length`), so it steps back correctly even deep into the site.
-- Hot Deals: admin search-to-add (by name, SKU or aisle); the section itself now sits
-  right after Quick Navigation on the homepage, highlighted, cards only, no banner.
-- Every Prev/Next control on the site (hero, Quick Nav, category rows) now loops
-  continuously; Quick Navigation also auto-advances every 3 seconds.
-- Category product-row Prev/Next arrows moved to sit on both sides of the grid
-  itself, not against the category banner.
-- Admin: Messages is now a proper table (Name / Contact info / Time and date /
-  Message) with two-step delete confirmation; Dashboard gained a date-range filter,
-  a "Today's revenue" stat and a "View store" button; a new Inventory Management view
-  handles stock, cost price and profit/loss per size (kept out of the product editor,
-  which still only edits stock).
+The public pages keep the same HTML structure, class names, styles and URLs as before;
+only how the scripts are loaded changed (one bundled module instead of six script tags
+and a CDN copy of Supabase).
 
-Plain HTML, CSS and JavaScript. No framework, no build step. Static pages on Netlify,
-Supabase behind them, one Netlify function for order email.
+```bash
+npm install
+npm run dev        # http://localhost:5173  (storefront)  ·  /admin  (panel)
+npm run build      # type-check, then build to dist/
+npm run preview    # serve dist/ exactly as it will be deployed
+npm test           # unit tests
+npm run lint
+```
 
-Written for a **brand new Supabase project**. The SQL assumes nothing already exists and
-depends on nothing from any earlier database.
+## While the Supabase project is paused
 
-The site also runs with no backend at all: open `index.html` and it works on local demo
-data, so the shop can be reviewed before the Supabase project is created.
+The site checks once per visit whether the database answers (`src/lib/backend.ts`).
 
----
+- **Shop** — keeps working read-only: it shows the last catalogue this browser saw, or the
+  starter catalogue. A bar at the top says online ordering is paused and gives the phone
+  and WhatsApp number. Checkout, sign-in and the contact form answer with the same
+  message instead of failing silently or pretending to take an order.
+- **Admin** — opens in **Preview** with sample data stored in the browser (passcode
+  `riyadul2026`). Nothing in preview is real or saved to the shop. "Check database again"
+  switches back to the live sign-in as soon as the project is resumed.
 
-## Set up Supabase
+### SQL saved to run later
 
-1. Create the new project.
-2. SQL editor → run `sql/01-schema.sql` in full.
-3. SQL editor → run `sql/02-seed.sql` (8 aisles, 20 products, 3 discount codes, 4 hero
-   placeholders). Safe to re-run; it upserts.
-4. Copy the project URL and the **anon / publishable** key into the top of
-   `js/supabase.js`. Never put the service role key there — that file ships to every
-   visitor's browser.
-5. Authentication → Users → **Add user** for the shop owner.
-6. Run this with that email:
+**`sql/pending/2026-11-10_run_when_supabase_resumes.sql` has not been run.** After
+resuming the project, paste the whole file into the Supabase SQL editor and run it once.
+It is one transaction, safe to run twice, and never drops or deletes data. It contains:
+
+- every earlier migration (now in `sql/archive/`), so it no longer matters which ones
+  were already applied — promotions, cost tracking, inventory history, threaded messages;
+- fixes: placeholder hero text "undefined" and broken category banners; a blocked customer
+  could unblock their own account; a customer could edit the shop's replies; order
+  tracking exposed phone, email and address to anyone guessing an order number;
+  cancelling an order did not return stock; three indexes.
+
+Until it is run, the live panel works as before, minus those fixes.
+
+## Set up a new Supabase project
+
+1. Create the project. SQL editor → run `sql/01-schema.sql`.
+2. Run `sql/pending/2026-11-10_run_when_supabase_resumes.sql`.
+3. Run `sql/02-seed.sql` (8 aisles, 20 products, 3 discount codes, 4 hero placeholders;
+   safe to re-run).
+4. Put the project URL and the **publishable (anon)** key in `src/lib/config.ts`, or set
+   `VITE_SUPABASE_URL` / `VITE_SUPABASE_ANON_KEY` (see `.env.example`). Never the service
+   role key — this code ships to every visitor's browser.
+5. Authentication → Users → **Add user** for the shop owner, then:
 
    ```sql
    insert into admins (user_id, email, name)
@@ -166,10 +144,15 @@ status changes nothing, and an anonymous visitor cannot read the orders table at
 
 ## What the client does day to day
 
-Everything from `admin.html`.
+Everything from `/admin`. A search box in the top bar (`Ctrl/⌘ K`) jumps to any page, order,
+customer or product; the sun/moon button switches light and dark.
 
-**Dashboard** — revenue, orders waiting, customer count, guest orders, low and
-out-of-stock products. Click any order to open it.
+**Dashboard** — planned top to bottom around three questions: *what needs me now*
+(orders to confirm or ship, unread messages, sold-out and low stock, unpaid deliveries,
+promotions about to end, plus a clickable order pipeline), *how is the shop doing* (sales,
+orders, average order, net profit and customers, each compared with the period before, and
+a sales chart for the chosen range) and *where is the money* (profit statement, sales by
+aisle, best sellers, latest orders, stock to watch).
 
 **Orders** — one searchable list. Search by order number, customer number, name, email,
 phone, city, status or product. Filter by status, and by accounts versus guests. Open an
@@ -204,22 +187,11 @@ with no active slides, the hero simply does not render.
 
 ---
 
-## Run it locally
-
-```bash
-cd riyadul-bd
-python3 -m http.server 8080
-```
-
-Open `http://localhost:8080`. While the Supabase keys are blank the site runs on browser
-storage, and `/admin.html` opens with the placeholder passcode `riyadul2026`. Once the
-keys are filled in, that passcode is gone and the panel asks for the admin email and
-password instead.
-
 ## Deploy
 
-Netlify: drag the folder in, or connect the repo. `netlify.toml` sets the clean URLs,
-cache headers, security headers and `noindex` on the admin panel.
+Netlify: connect the repo. `netlify.toml` sets the build command, the clean URLs
+(`/product/<slug>`, `/category/<aisle>`, `/admin` …), cache and security headers, and
+`noindex` on the admin panel.
 
 Order email is optional. Add these in Netlify → Environment:
 
@@ -234,34 +206,43 @@ Without the key, the function returns quietly and orders still go through.
 ## Shop details
 
 Phone, WhatsApp, email, address, hours and delivery charges live in one object at the top
-of `js/core.js`. The delivery rule also exists in `place_order()` (inside Dhaka ৳60,
+of `src/shop/core.js`. The delivery rule also exists in `place_order()` (inside Dhaka ৳60,
 outside ৳120, free over ৳2,000) because the database, not the browser, decides what an
 order costs. Change both if the rates change.
 
 ## Files
 
 ```
-index.html      home — hero slideshow, today's board, aisles, featured, deals
-products.html   listing with filters, sort, search, shareable URLs
-product.html    detail — sizes, stock, gallery, tabs, related
-checkout.html   this order's contact and delivery details, payment, coupon
-account.html    sign in, register, order history with progress, profile, tracking
-wishlist.html   saved items
-contact.html    contact form, delivery charges, return terms
-admin.html      admin panel (noindex)
+index.html, products.html, product.html, checkout.html,
+account.html, wishlist.html, contact.html      public pages (markup unchanged)
+admin.html                                     admin panel shell (noindex)
 
-css/style.css   storefront
-css/admin.css   admin panel
-js/data.js      starter catalogue, category icons, hero placeholders
-js/supabase.js  data layer — Supabase, with a local fallback
-js/core.js      header, footer, cart, drawer, toasts, product card
-js/pages.js     one controller per public page
-js/admin.js     dashboard, orders, customers, products, categories, hero, coupons, messages
+src/lib/config.ts     Supabase URL + publishable key (env-overridable)
+src/lib/backend.ts    "is the database answering?" probe
+src/lib/db.js         data layer: Supabase, with the browser fallback
+src/lib/seed.js       starter catalogue, icons, placeholders
+src/lib/demo.js       sample trading data for the admin preview only
 
-sql/01-schema.sql   tables, sequences, triggers, functions, RLS, grants, storage
-sql/02-seed.sql     starter content
+src/shop/main.js      storefront entry
+src/shop/core.js      header, footer, cart, drawer, toasts, product card
+src/shop/pages.js     one controller per public page
+src/shop/style.css
+
+src/admin/admin.js    orders, customers, products, categories, inventory,
+                      hot deals, hero, coupons, messages, settings
+src/admin/shell.js    sidebar, top bar, theme, search palette
+src/admin/dashboard.js  the dashboard
+src/admin/metrics.ts  date ranges, series, scales (unit-tested)
+src/admin/admin.css, shell.css
+
+sql/01-schema.sql     tables, triggers, functions, RLS, grants, storage
+sql/02-seed.sql       starter content
+sql/pending/          SQL waiting to be run (see above)
+sql/archive/          earlier migrations, superseded by the pending file
+
+public/               robots.txt, sitemap.xml, logo
 netlify/functions/send-order-email.js
-netlify.toml, robots.txt, sitemap.xml
+tests/
 ```
 
 ## Notes
@@ -270,3 +251,7 @@ netlify.toml, robots.txt, sitemap.xml
   disappear as soon as real files are uploaded from the panel.
 - Prices are in BDT and formatted with `৳` throughout.
 - The basket lives in browser storage, so it survives a reload and a closed tab.
+- Known and not changed here: per-size cost fields live inside `products.variants`, which
+  the public can read, so buying costs are visible to anyone who inspects the API. Moving
+  them to an admin-only table is a schema change worth doing before costs are entered for
+  real.

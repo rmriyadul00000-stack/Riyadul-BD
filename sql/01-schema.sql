@@ -1,7 +1,8 @@
 -- ============================================================
 -- Riyadul BD — complete database
 -- Written for a BRAND NEW Supabase project. It assumes nothing exists.
--- Run this whole file once in the SQL editor, then 02-seed.sql.
+-- Run this whole file once in the SQL editor, then
+-- sql/pending/2026-11-10_run_when_supabase_resumes.sql, then 02-seed.sql.
 --
 -- What it creates
 --   admins         who may open the admin panel

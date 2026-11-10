@@ -1,57 +1,83 @@
 /* ============================================================
    Riyadul BD — data layer
-   Every page talks to RB_DB only. Two backends sit behind it:
+   Every page talks to RB_DB only. Behind it:
 
-   1. Supabase  — used once SUPABASE_URL / SUPABASE_ANON_KEY are filled
-                  in below. This is the real system: customers, orders,
-                  order items, categories, hero slides and storage all
-                  live in the database, and place_order() writes an
-                  order and its lines in one transaction.
-   2. Local     — browser storage, used only while the keys are blank so
-                  the site is clickable before the project exists. It
-                  mirrors the same tables and the same ID formats.
+   1. Supabase  — the real system: customers, orders, order items,
+                  categories, hero slides and storage live in the database,
+                  and place_order() writes an order and its lines in one
+                  transaction.
+   2. Browser   — the same tables and ID formats in localStorage. Used for
+                  local development without keys, and as the read-only /
+                  preview fallback while the Supabase project is paused.
 
-   Only the anon (publishable) key belongs here. It ships to every
-   visitor. The service role key must never appear in this file.
+   Keys come from src/lib/config.ts. Only the publishable (anon) key may
+   ever be used here; it ships to every visitor.
    ============================================================ */
 
-const SUPABASE_URL = 'https://zgvvaxgafeccrawvkbuf.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_zEVHxl1jQiNDWvUoYADT0Q_1HLZ8Qxy';
+import { createClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY, HAS_BACKEND } from './config';
+import { probeBackend } from './backend';
+import { RB_SETTINGS, RB_PRODUCTS, RB_CATEGORIES, RB_COUPONS, RB_HERO } from './seed.js';
+import { demoDataset } from './demo.js';
 
-/* admin.html sets window.RB_IS_ADMIN = true before this file loads, so
+/* admin.html sets window.RB_IS_ADMIN = true before this module loads, so
    the admin session and the shopper session never share a storage key. */
-const RB_LIVE = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY && window.supabase);
-const sb = RB_LIVE
-  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      auth: { storageKey: window.RB_IS_ADMIN ? 'rb-admin-auth' : 'rb-customer-auth' }
+const IS_ADMIN = Boolean(window.RB_IS_ADMIN);
+const sb = HAS_BACKEND
+  ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: { storageKey: IS_ADMIN ? 'rb-admin-auth' : 'rb-customer-auth' }
     })
   : null;
+
+/* Three modes, decided once per page by `ready` below:
+     live    — Supabase answers; the real system.
+     offline — keys are set but the project is paused/unreachable. The shop
+               shows the last catalogue this browser saw (or the starter
+               catalogue), read-only: ordering, sign-in and the contact form
+               say so plainly instead of pretending to work. The admin panel
+               opens in preview with sample data.
+     local   — no keys at all; everything runs on browser storage (dev). */
+let RB_MODE = HAS_BACKEND ? 'live' : 'local';
+let RB_LIVE = false;
+let LS_PREFIX = 'rb.';
+const OFFLINE_MSG = 'Online ordering is paused for a short while. Please call or WhatsApp us and we will take your order by hand.';
+const shopOffline = () => RB_MODE === 'offline' && !IS_ADMIN;
 
 const ok = (data) => ({ ok: true, data });
 const fail = (e) => ({ ok: false, error: (e && e.message) || String(e || 'Something went wrong') });
 const uid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-/* Seed/default globals (RB_SETTINGS, RB_PRODUCTS, ...) normally come from a separate
-   data.js. If that file isn't loaded, fall back to safe defaults instead of throwing a
-   ReferenceError (typeof on a bare identifier is safe even if it was never declared). */
 const RB_DEFAULT_SETTINGS = {
   announcement_text: '', logo_url: '', logo_height: '40', logo_width: '',
   logo_fit: 'contain', logo_shape: 'none', hotdeals_title: 'Hot Deals', low_stock_threshold: '5'
 };
-const rbSettingsBase = () => (typeof RB_SETTINGS !== 'undefined' ? RB_SETTINGS : RB_DEFAULT_SETTINGS);
+const rbSettingsBase = () => ({ ...RB_DEFAULT_SETTINGS, ...RB_SETTINGS });
+
+/* last catalogue seen while live, so a paused database does not empty the shop */
+const SNAP = {
+  save(k, v) { if (IS_ADMIN) return; try { localStorage.setItem('rb.snap.' + k, JSON.stringify(v)); localStorage.setItem('rb.snap.at', String(Date.now())); } catch {} },
+  get(k) { try { return JSON.parse(localStorage.getItem('rb.snap.' + k) || 'null'); } catch { return null; } },
+  at() { try { return Number(localStorage.getItem('rb.snap.at') || 0); } catch { return 0; } }
+};
 const rbSeed = {
-  products: () => (typeof RB_PRODUCTS !== 'undefined' ? RB_PRODUCTS : []),
-  categories: () => (typeof RB_CATEGORIES !== 'undefined' ? RB_CATEGORIES : []),
-  coupons: () => (typeof RB_COUPONS !== 'undefined' ? RB_COUPONS : []),
-  hero: () => (typeof RB_HERO !== 'undefined' ? RB_HERO : [])
+  products: () => (RB_MODE === 'offline' && SNAP.get('products')) || RB_PRODUCTS,
+  categories: () => (RB_MODE === 'offline' && SNAP.get('categories')) || RB_CATEGORIES,
+  coupons: () => RB_COUPONS,
+  hero: () => (RB_MODE === 'offline' && SNAP.get('hero')) || RB_HERO,
+  settings: () => ({ ...rbSettingsBase(), ...((RB_MODE === 'offline' && SNAP.get('settings')) || {}) })
 };
 
 /* ---------- local backend ---------- */
 const LS = {
-  get(k, d) { try { const v = localStorage.getItem('rb.' + k); return v ? JSON.parse(v) : d; } catch { return d; } },
-  set(k, v) { try { localStorage.setItem('rb.' + k, JSON.stringify(v)); } catch {} }
+  get(k, d) { try { const v = localStorage.getItem(LS_PREFIX + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(LS_PREFIX + k, JSON.stringify(v)); } catch {} }
 };
 function seedLocal() {
+  /* a newer live snapshot replaces the offline copy of the catalogue */
+  if (RB_MODE === 'offline' && SNAP.at() > (LS.get('snapAt') || 0)) {
+    ['products', 'categories', 'hero', 'settings'].forEach(k => LS.set(k, null));
+    LS.set('snapAt', SNAP.at());
+  }
   if (!LS.get('products'))    LS.set('products', rbSeed.products());
   if (!LS.get('categories'))  LS.set('categories', rbSeed.categories());
   if (!LS.get('coupons'))     LS.set('coupons', rbSeed.coupons());
@@ -61,10 +87,16 @@ function seedLocal() {
   if (!LS.get('customers'))   LS.set('customers', []);
   if (!LS.get('messages'))    LS.set('messages', []);
   if (!LS.get('wishlist'))    LS.set('wishlist', []);
-  if (!LS.get('settings'))    LS.set('settings', { ...rbSettingsBase() });
+  if (!LS.get('settings'))    LS.set('settings', rbSeed.settings());
   if (!LS.get('seq'))         LS.set('seq', { cust: 10001, order: 10001 });
+  /* the admin preview gets a believable month of trading to look at */
+  if (IS_ADMIN && !LS.get('demoSeeded')) {
+    const d = demoDataset(LS.get('products', []), { unitCost: rbUnitCost });
+    LS.set('products', d.products); LS.set('customers', d.customers); LS.set('orders', d.orders);
+    LS.set('order_items', d.order_items); LS.set('inventory_log', d.inventory_log);
+    LS.set('messages', d.messages); LS.set('seq', d.seq); LS.set('demoSeeded', true);
+  }
 }
-if (!RB_LIVE) seedLocal();
 function nextCode(kind) {
   const seq = LS.get('seq', { cust: 10001, order: 10001 });
   const n = seq[kind]++; LS.set('seq', seq);
@@ -132,14 +164,31 @@ const productToRow = (p) => ({
   hot_deal: !!p.hot_deal, hot_deal_sort: p.hot_deal_sort || 0,
   discount_pct: p.discount_pct == null || p.discount_pct === '' ? null : Number(p.discount_pct),
   description: p.description || '', benefits: p.benefits || [], storage_tip: p.storage_tip || '',
-  /* only sent when present, so the panel still saves before 02-upgrade.sql has been run */
+  /* only sent when present, so the panel still saves before the pending SQL has been run */
   ...(p.promo_start !== undefined ? { promo_start: p.promo_start || null } : {}),
   ...(p.promo_end !== undefined ? { promo_end: p.promo_end || null } : {}),
   ...(p.hot_deal_auto !== undefined ? { hot_deal_auto: !!p.hot_deal_auto } : {})
 });
 
-const RB_DB = {
-  live: RB_LIVE,
+/* stock follows cancellation both ways: cancelling returns the units,
+   re-opening a cancelled order takes them again */
+function localRestock(order, sign) {
+  const products = LS.get('products', []), log = LS.get('inventory_log', []);
+  LS.get('order_items', []).filter(i => i.order_id === order.id).forEach(i => {
+    const p = products.find(x => x.id === i.product_id);
+    const v = p && (p.variants || []).find(x => x.label === i.variant_label);
+    if (!v) return;
+    v.stock = Math.max(0, (Number(v.stock) || 0) + sign * i.qty);
+    log.unshift({
+      id: uid('lg'), product_id: p.id, variant_label: v.label, kind: sign > 0 ? 'return' : 'sale', qty: i.qty,
+      unit_cost: i.unit_cost == null ? null : i.unit_cost, amount: (Number(i.unit_price) || 0) * i.qty,
+      note: (sign > 0 ? 'Cancelled ' : 'Re-opened ') + order.order_code, created_at: new Date().toISOString()
+    });
+  });
+  LS.set('products', products); LS.set('inventory_log', log);
+}
+
+const impl = {
   client: sb,
 
   /* ===================== CATEGORIES ===================== */
@@ -151,6 +200,7 @@ const RB_DB = {
     let q = sb.from('categories').select('*').order('sort');
     if (!includeHidden) q = q.eq('active', true);
     const { data, error } = await q;
+    if (!error && !includeHidden) SNAP.save('categories', data);
     return error ? fail(error) : ok(data);
   },
   async saveCategory(c) {
@@ -189,6 +239,7 @@ const RB_DB = {
     if (device) q = q.eq('device', device);
     if (!includeHidden) q = q.eq('active', true);
     const { data, error } = await q;
+    if (!error && !includeHidden && !device) SNAP.save('hero', data);
     return error ? fail(error) : ok(data);
   },
   async saveHeroSlide(s) {
@@ -214,23 +265,25 @@ const RB_DB = {
   async products(includeHidden = false) {
     if (!RB_LIVE) {
       const all = LS.get('products', []);
-      return ok(includeHidden ? all : all.filter(p => p.active !== false));
+      const list = includeHidden ? all : all.filter(p => p.active !== false);
+      return ok(IS_ADMIN ? list : list.map(rbResolveForShop));
     }
     let q = sb.from('products').select('*').order('created_at', { ascending: false });
     if (!includeHidden) q = q.eq('active', true);
     const { data, error } = await q;
     if (error) return fail(error);
     const list = data.map(rowToProduct);
-    return ok(window.RB_IS_ADMIN ? list : list.map(rbResolveForShop));
+    if (!includeHidden) SNAP.save('products', list);
+    return ok(IS_ADMIN ? list : list.map(rbResolveForShop));
   },
   async product(slug) {
     if (!RB_LIVE) {
       const p = LS.get('products', []).find(x => x.slug === slug || x.id === slug);
-      return p ? ok(p) : fail('That product is no longer listed.');
+      return p ? ok(IS_ADMIN ? p : rbResolveForShop(p)) : fail('That product is no longer listed.');
     }
     const { data, error } = await sb.from('products').select('*').eq('slug', slug).single();
     if (error) return fail(error);
-    return ok(window.RB_IS_ADMIN ? rowToProduct(data) : rbResolveForShop(rowToProduct(data)));
+    return ok(IS_ADMIN ? rowToProduct(data) : rbResolveForShop(rowToProduct(data)));
   },
   async saveProduct(p) {
     if (!RB_LIVE) {
@@ -311,6 +364,7 @@ const RB_DB = {
 
   /* ===================== AUTH & CUSTOMER ACCOUNT ===================== */
   async register({ email, password, full_name, phone }) {
+    if (shopOffline()) return fail(OFFLINE_MSG);
     if (!RB_LIVE) {
       const all = LS.get('customers', []);
       if (all.some(c => c.email === email)) return fail('An account already uses this email. Sign in instead.');
@@ -326,6 +380,7 @@ const RB_DB = {
     return error ? fail(error) : ok(data.user);
   },
   async login({ email, password }) {
+    if (shopOffline()) return fail(OFFLINE_MSG);
     if (!RB_LIVE) {
       const c = LS.get('customers', []).find(x => x.email === email && x.password === password);
       if (!c) return fail('Email or password is wrong.');
@@ -407,6 +462,7 @@ const RB_DB = {
      The database decides whether it belongs to an account or is a guest
      order — the checkout email is never used to guess. */
   async placeOrder(payload) {
+    if (shopOffline()) return fail(OFFLINE_MSG);
     if (!RB_LIVE) {
       const me = await this.me();
       const products = LS.get('products', []);
@@ -418,11 +474,12 @@ const RB_DB = {
         const v = (p.variants || []).find(x => x.label === it.variant_label);
         if (!v) return fail('That size is no longer sold: ' + it.variant_label);
         if (it.qty > (v.stock || 0)) return fail(`Only ${v.stock} left of ${p.name} (${v.label}).`);
+        const price = rbEffPrice(p, v), cost = rbUnitCost(v);
         v.stock -= it.qty;
-        subtotal += v.price * it.qty;
+        subtotal += price * it.qty;
         lines.push({
           id: uid('li'), product_id: p.id, product_name: p.name,
-          variant_label: v.label, unit_price: v.price, qty: it.qty, line_total: v.price * it.qty
+          variant_label: v.label, unit_price: price, unit_cost: cost, qty: it.qty, line_total: price * it.qty
         });
       }
       LS.set('products', products);
@@ -456,6 +513,12 @@ const RB_DB = {
       const items = LS.get('order_items', []);
       lines.forEach(l => items.push({ ...l, order_id: order.id }));
       LS.set('order_items', items);
+      const log = LS.get('inventory_log', []);
+      lines.forEach(l => log.unshift({
+        id: uid('lg'), product_id: l.product_id, variant_label: l.variant_label, kind: 'sale', qty: l.qty,
+        unit_cost: l.unit_cost, amount: l.line_total, note: 'Order ' + order.order_code, created_at: order.placed_at
+      }));
+      LS.set('inventory_log', log);
       return ok({ order_id: order.id, order_code: order.order_code, total: order.total });
     }
 
@@ -530,6 +593,8 @@ const RB_DB = {
       const all = LS.get('orders', []);
       const i = all.findIndex(o => o.id === id);
       if (i > -1) {
+        const was = all[i].status;
+        if ((was === 'cancelled') !== (status === 'cancelled')) localRestock(all[i], status === 'cancelled' ? 1 : -1);
         all[i].status = status;
         const stamp = { confirmed: 'confirmed_at', shipped: 'shipped_at', delivered: 'delivered_at', cancelled: 'cancelled_at' }[status];
         if (stamp && !all[i][stamp]) all[i][stamp] = new Date().toISOString();
@@ -558,6 +623,7 @@ const RB_DB = {
      thread (customer_id set, sender 'customer' or 'admin'). Everything
      below works off that one table — nothing is duplicated per thread. */
   async saveMessage(msg) {
+    if (shopOffline()) return fail(OFFLINE_MSG);
     const me = await this.me();
     const payload = { ...msg, customer_id: me && me.id ? me.id : null, sender: 'customer', read_by_admin: false, read_by_customer: true };
     if (!RB_LIVE) {
@@ -684,6 +750,7 @@ const RB_DB = {
     if (error) return fail(error);
     const map = { ...rbSettingsBase() };
     (data || []).forEach(r => { if (r.value !== null) map[r.key] = r.value; });
+    SNAP.save('settings', map);
     return ok(map);
   },
   async saveSetting(key, value) {
@@ -721,7 +788,7 @@ const RB_DB = {
   /* Live: the account must sign in AND have a row in `admins`. No
      passcode, and no admin list anywhere in the browser code. */
   async adminLogin({ email, password }) {
-    if (!RB_LIVE) return fail('Supabase is not connected yet.');
+    if (!RB_LIVE) return fail('The database is not connected.');
     const { data, error } = await sb.auth.signInWithPassword({ email, password });
     if (error) return fail(error);
     const { data: row } = await sb.from('admins').select('email, name').eq('user_id', data.user.id).maybeSingle();
@@ -737,4 +804,32 @@ const RB_DB = {
   }
 };
 
+/* Decide the mode before any call runs. Every method of RB_DB waits for
+   this, so pages never have to think about it. */
+const ready = (async () => {
+  if (HAS_BACKEND) RB_MODE = (await probeBackend(SUPABASE_URL, SUPABASE_ANON_KEY)) ? 'live' : 'offline';
+  RB_LIVE = RB_MODE === 'live';
+  if (RB_MODE === 'offline') LS_PREFIX = 'rbo.';
+  if (!RB_LIVE) seedLocal();
+  return RB_MODE;
+})();
+
+const RB_DB = new Proxy(impl, {
+  get(target, key) {
+    if (key === 'ready') return ready;
+    if (key === 'mode') return RB_MODE;
+    if (key === 'live') return RB_LIVE;
+    if (key === 'offlineMessage') return OFFLINE_MSG;
+    const v = target[key];
+    if (typeof v !== 'function') return v;
+    return async (...args) => { await ready; return v.apply(RB_DB, args); };
+  }
+});
+
+/* wipe the browser-only preview data (admin preview "Reset sample data") */
+export function resetLocalData() {
+  Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX) && !k.startsWith('rb.snap.')).forEach(k => localStorage.removeItem(k));
+}
+
 window.RB_DB = RB_DB;
+export { RB_DB, RB_COST_KEYS, rbUnitCost, rbPromoState, rbEffPrice, rbResolveForShop };

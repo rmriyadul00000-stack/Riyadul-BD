@@ -4,6 +4,9 @@
    Loaded on every public page before the page script.
    ============================================================ */
 
+import { RB_DB } from '../lib/db.js';
+import { RB_SETTINGS } from '../lib/seed.js';
+
 const RB = {
   shop: {
     name: 'Riyadul BD',
@@ -84,7 +87,16 @@ RB.logoDefault = 'assets/img/logo.svg';
 /* ---------- helpers ---------- */
 RB.money = n => RB.shop.currency + Number(n || 0).toLocaleString('en-BD', { maximumFractionDigits: 0 });
 RB.esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-RB.qs = k => new URLSearchParams(location.search).get(k);
+/* Query value, with the clean URLs (/product/<slug>, /category/<cat>) read
+   from the path: the host rewrites those to product.html / products.html
+   without changing the address bar, so the slug never reaches the query. */
+RB.qs = k => {
+  const v = new URLSearchParams(location.search).get(k);
+  if (v != null) return v;
+  const m = location.pathname.match(/^\/(product|category)\/([^/]+)\/?$/);
+  if (m && ((m[1] === 'product' && k === 'slug') || (m[1] === 'category' && k === 'cat'))) return decodeURIComponent(m[2]);
+  return null;
+};
 RB.el = (sel, root) => (root || document).querySelector(sel);
 RB.els = (sel, root) => Array.from((root || document).querySelectorAll(sel));
 RB.lowestPrice = p => Math.min(...(p.variants || [{ price: 0 }]).map(v => v.price));
@@ -232,11 +244,18 @@ RB.drawer = {
 
 /* ---------- header + footer ---------- */
 RB.chrome = async function (activePage) {
-  const [cats, user, settings] = await Promise.all([
+  const [cats, , settings] = await Promise.all([
     RB_DB.categories().then(r => r.data || []),
     RB_DB.me(),
     RB_DB.settings().then(r => r.data || RB_SETTINGS)
   ]);
+  /* database paused or unreachable: say so once, at the top of every page */
+  if (RB_DB.mode === 'offline' && !RB.el('.offline-note')) {
+    const note = document.createElement('div');
+    note.className = 'offline-note'; note.setAttribute('role', 'status');
+    note.innerHTML = `Online ordering is paused for a short while. You can still browse — to order, call <a href="tel:${RB.shop.phone.replace(/\s+/g, '')}">${RB.esc(RB.shop.phone)}</a> or <a href="https://wa.me/${RB.shop.whatsapp}" target="_blank" rel="noopener">WhatsApp us</a>.`;
+    document.body.prepend(note);
+  }
   const hotDealsLabel = settings.hotdeals_title || 'Hot Deals';
   const nav = [
     { href: 'index.html', label: 'Home', key: 'home' },
@@ -464,3 +483,4 @@ RB.wireCards = function (container, products) {
 };
 
 window.RB = RB;
+export { RB };

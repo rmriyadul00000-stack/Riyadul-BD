@@ -142,10 +142,6 @@ td img.thumb{width:44px;height:44px;object-fit:cover;border-radius:6px}
 .msg p{margin:0;font-size:.92rem}
 
 @media (max-width:900px){
-  .shell{grid-template-columns:1fr}
-  .side{position:static;height:auto;flex-direction:row;overflow-x:auto;gap:6px;align-items:center}
-  .side .mark,.side .mode,.side .spacer{display:none}
-  .side button{width:auto;white-space:nowrap}
   .main{padding:16px 14px 50px}
   .grid2,.grid3{grid-template-columns:1fr}
   .variant,.vhead{grid-template-columns:1fr 1fr;gap:6px}

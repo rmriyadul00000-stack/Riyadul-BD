@@ -572,3 +572,7 @@ table.data td{padding:10px;border-bottom:1px solid var(--line)}
 .progress.cancelled::before{display:none}
 .progress.cancelled .pstep{color:var(--chilli);font-weight:700}
 .progress.cancelled .pstep::before{background:var(--chilli);border-color:var(--chilli)}
+
+/* ---------- notice shown while the shop database is paused ---------- */
+.offline-note{background:#FFF4D6;color:#5C4300;border-bottom:1px solid #EBD79B;font-size:.86rem;font-weight:600;text-align:center;padding:9px 16px;line-height:1.45}
+.offline-note a{color:inherit;text-decoration:underline}

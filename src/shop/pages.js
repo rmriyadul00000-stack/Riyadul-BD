@@ -4,7 +4,11 @@
    controller runs.
    ============================================================ */
 
-document.addEventListener('DOMContentLoaded', async () => {
+import { RB } from './core.js';
+import { RB_DB } from '../lib/db.js';
+import { RB_SETTINGS } from '../lib/seed.js';
+
+export async function startPage() {
   const page = document.body.dataset.page;
   const activePage = page === 'products'
     ? (RB.qs('hotdeals') === '1' ? 'hotdeals' : RB.qs('cat') ? 'cat-' + RB.qs('cat') : page)
@@ -12,7 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   await RB.chrome(activePage);
   const run = { home, products, product, checkout, account, wishlist, contact }[page];
   if (run) run().catch(err => { console.error(err); RB.toast('Something went wrong loading this page.', true); });
-});
+}
 
 /* ===================== HOME ===================== */
 const CAT_PAGE_SIZE = 6;   // products shown per category before "Show More"
@@ -1050,7 +1054,7 @@ function orderCard(o) {
       ${items.map(i => `<tr><td>${RB.esc(i.product_name)}</td><td>${RB.esc(i.variant_label)}</td><td>${i.qty}</td><td>${RB.money(i.unit_price * i.qty)}</td></tr>`).join('')}
     </table></div>
     <div class="totals" style="margin-top:12px">
-      <div><span>Delivered to</span><span>${RB.esc(o.contact_name)} · ${RB.esc(o.ship_address)}, ${RB.esc(o.ship_city)}</span></div>
+      <div><span>Delivered to</span><span>${RB.esc([o.contact_name, [o.ship_address, o.ship_city].filter(Boolean).join(', ')].filter(Boolean).join(' · '))}</span></div>
       <div class="grand"><span>Total</span><span>${RB.money(o.total)}</span></div>
     </div>
   </div>`;

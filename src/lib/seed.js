@@ -6,6 +6,8 @@
 
 /* Produce-toned SVG placeholder so the shop renders before real photos
    are uploaded. Replace `images` with real URLs and this disappears. */
+const xmlEsc = t => String(t == null ? '' : t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+
 function rbArt(name, a, b) {
   const initials = name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
   const svg =
@@ -15,7 +17,7 @@ function rbArt(name, a, b) {
     `<rect width="400" height="400" fill="url(#g)"/>` +
     `<circle cx="200" cy="186" r="96" fill="rgba(255,255,255,.22)"/>` +
     `<text x="200" y="208" font-family="Georgia,serif" font-size="74" font-weight="700" ` +
-    `fill="rgba(255,255,255,.92)" text-anchor="middle">${initials}</text>` +
+    `fill="rgba(255,255,255,.92)" text-anchor="middle">${xmlEsc(initials)}</text>` +
     `<text x="200" y="352" font-family="system-ui,sans-serif" font-size="19" ` +
     `fill="rgba(255,255,255,.75)" text-anchor="middle">Riyadul BD</text></svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
@@ -57,7 +59,7 @@ function rbBanner(w, h, a, b, label) {
     `<rect width="${w}" height="${h}" fill="url(#g)"/>` +
     `<circle cx="${w * 0.8}" cy="${h * 0.22}" r="${Math.min(w, h) * 0.28}" fill="rgba(255,255,255,.12)"/>` +
     `<text x="${w / 2}" y="${h / 2}" font-family="Georgia,serif" font-size="${Math.min(w, h) * 0.11}" ` +
-    `fill="rgba(255,255,255,.88)" text-anchor="middle" dominant-baseline="middle">${label}</text></svg>`;
+    `fill="rgba(255,255,255,.88)" text-anchor="middle" dominant-baseline="middle">${xmlEsc(label)}</text></svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 const BANNER_TONES = {
@@ -92,15 +94,15 @@ function rbHero(device, a, b, label) {
     `<circle cx="${w * 0.78}" cy="${h * 0.3}" r="${h * 0.22}" fill="rgba(255,255,255,.14)"/>` +
     `<circle cx="${w * 0.2}" cy="${h * 0.75}" r="${h * 0.3}" fill="rgba(255,255,255,.08)"/>` +
     `<text x="${w / 2}" y="${h / 2}" font-family="Georgia,serif" font-size="${h * 0.09}" ` +
-    `fill="rgba(255,255,255,.9)" text-anchor="middle">${label}</text></svg>`;
+    `fill="rgba(255,255,255,.9)" text-anchor="middle">${xmlEsc(label)}</text></svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 
 const RB_HERO = [
-  { id: 'h1', device: 'desktop', image_url: rbHero('desktop', '#14331F', '#3E7A47'), alt: 'Fresh harvest', sort: 1, active: true },
-  { id: 'h2', device: 'desktop', image_url: rbHero('desktop', '#7A4B10', '#E3A008'), alt: 'Honey and ghee', sort: 2, active: true },
-  { id: 'h3', device: 'mobile',  image_url: rbHero('mobile', '#14331F', '#3E7A47'), alt: 'Fresh harvest', sort: 1, active: true },
-  { id: 'h4', device: 'mobile',  image_url: rbHero('mobile', '#7A4B10', '#E3A008'), alt: 'Honey and ghee', sort: 2, active: true }
+  { id: 'h1', device: 'desktop', image_url: rbHero('desktop', '#14331F', '#3E7A47', 'Fresh harvest'), alt: 'Fresh harvest', sort: 1, active: true },
+  { id: 'h2', device: 'desktop', image_url: rbHero('desktop', '#7A4B10', '#E3A008', 'Honey and ghee'), alt: 'Honey and ghee', sort: 2, active: true },
+  { id: 'h3', device: 'mobile',  image_url: rbHero('mobile', '#14331F', '#3E7A47', 'Fresh harvest'), alt: 'Fresh harvest', sort: 1, active: true },
+  { id: 'h4', device: 'mobile',  image_url: rbHero('mobile', '#7A4B10', '#E3A008', 'Honey and ghee'), alt: 'Honey and ghee', sort: 2, active: true }
 ];
 
 const RB_PRODUCTS = [
@@ -311,3 +313,5 @@ const RB_COUPONS = [
   { code: 'FREEDELIVERY', type: 'shipping', value: 0, min_subtotal: 1000, active: true, note: 'Free delivery over ৳1000' },
   { code: 'NEW150', type: 'flat', value: 150, min_subtotal: 1200, active: true, note: '৳150 off your first order over ৳1200' }
 ];
+
+export { RB_CATEGORIES, RB_SETTINGS, RB_HERO, RB_PRODUCTS, RB_COUPONS };
