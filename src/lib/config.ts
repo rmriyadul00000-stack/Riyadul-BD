@@ -7,8 +7,8 @@
 const env = import.meta.env;
 
 export const SUPABASE_URL: string =
-  env.VITE_SUPABASE_URL ?? 'https://zgvvaxgafeccrawvkbuf.supabase.co';
+  env.VITE_SUPABASE_URL ?? 'https://lanfsmqravrlsewwbfqc.supabase.co';
 export const SUPABASE_ANON_KEY: string =
-  env.VITE_SUPABASE_ANON_KEY ?? 'sb_publishable_zEVHxl1jQiNDWvUoYADT0Q_1HLZ8Qxy';
+  env.VITE_SUPABASE_ANON_KEY ?? 'sb_publishable__XetPKFQOvc5dGRk_OuH-g_Cv-uYMCI';
 
 export const HAS_BACKEND = Boolean(SUPABASE_URL && SUPABASE_ANON_KEY);
