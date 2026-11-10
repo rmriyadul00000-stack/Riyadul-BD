@@ -8,6 +8,12 @@ import { AdminGate } from './auth';
 import { Shell } from './Shell';
 import Dashboard from './Dashboard';
 import { LegacyView } from './LegacyView';
+import Orders from './screens/Orders';
+import Customers from './screens/Customers';
+import Hero from './screens/Hero';
+import Coupons from './screens/Coupons';
+import Messages from './screens/Messages';
+import Settings from './screens/Settings';
 import { NAV_KEYS } from './nav';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1 } } });
@@ -27,6 +33,12 @@ function App() {
           <Route path="/admin" element={<Shell />}>
             <Route index element={<Navigate to="dash" replace />} />
             <Route path="dash" element={<Dashboard />} />
+            <Route path="orders" element={<Orders />} />
+            <Route path="customers" element={<Customers />} />
+            <Route path="hero" element={<Hero />} />
+            <Route path="coupons" element={<Coupons />} />
+            <Route path="messages" element={<Messages />} />
+            <Route path="settings" element={<Settings />} />
             <Route path=":view" element={<LegacyView />} />
           </Route>
           <Route path="*" element={<LegacyHash />} />

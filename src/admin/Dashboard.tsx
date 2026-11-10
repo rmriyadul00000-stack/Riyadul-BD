@@ -10,6 +10,7 @@ import { bucketSeries, previousWindow, periodWindow, pctChange, type RangeKey } 
 import { TrendChart } from './TrendChart';
 import { useAdminGo } from './Shell';
 import { openItem } from './admin.js';
+import { CustomerTag } from './ui/bits';
 
 const DAY = 864e5;
 const RANGES: [RangeKey, string][] = [['today', 'Today'], ['7d', '7 days'], ['30d', '30 days'], ['90d', '90 days'], ['month', 'This month'], ['all', 'All time'], ['custom', 'Custom']];
@@ -63,12 +64,6 @@ function Bars({ rows, fmt }: { rows: { label: string; sub?: string; value: numbe
 
 const Signed = ({ n }: { n: number }) => <span className={n > 0 ? 'pos' : n < 0 ? 'neg' : ''}>{n < 0 ? '−' : ''}{moneyD(Math.abs(n))}</span>;
 const Minus = ({ n }: { n: number }) => (n ? <span className="neg">−{moneyD(n)}</span> : <>{moneyD(0)}</>);
-
-function CustomerTag({ o }: { o: Order }) {
-  const go = useAdminGo();
-  if (o.is_guest) return <span className="pill guest">GUEST</span>;
-  return <a className="pill" href="#" onClick={e => { e.preventDefault(); e.stopPropagation(); go('customers', { openCustomer: o.customer_id }); }}>{o.customers?.customer_code || 'Account'}</a>;
-}
 
 /* The first screen of the panel, planned around three questions, top to bottom:
    1. What needs me right now?  → action list + order pipeline
