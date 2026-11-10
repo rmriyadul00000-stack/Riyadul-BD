@@ -29,13 +29,12 @@ npm test           # unit tests
 npm run lint
 ```
 
-### Admin screens
+### Admin
 
-The shell (sign-in, sidebar, top bar, search, theme), the **dashboard** and the data layer are React +
-TypeScript. The other screens (orders, customers, products, categories, inventory, hot deals, hero,
-coupons, messages, settings) are the original DOM-based code in `src/admin/admin.js`, hosted inside the
-React shell and working as before. They are being ported to React one at a time; each moves into its
-own component without changing what it does.
+Every admin screen is a React + TypeScript component under `src/admin/` — shell, dashboard,
+orders, customers, products, categories, inventory, hot deals, hero slides, discount codes,
+messages and settings. Popups (order, customer, product editor, item detail, aisle performance)
+share one `Modal`; lists load through TanStack Query and refresh after every save.
 
 ## While the Supabase project is paused
 
@@ -241,11 +240,13 @@ src/shop/pages/       Home, Products, ProductPage, Checkout, Account, Wishlist, 
 src/shop/lib/         cart store, toasts, query hooks, shop details (phone, delivery rules)
 src/shop/style.css
 
-src/admin/main.tsx    admin entry
+src/admin/main.tsx    admin entry and routes (/admin/<screen>)
 src/admin/auth.tsx    sign-in gate (live or preview)
 src/admin/Shell.tsx   sidebar, top bar, search palette, theme
+src/admin/screens/    Orders, Customers, Products, Categories, Inventory, HotDeals, Hero, Coupons, Messages, Settings
 src/admin/Dashboard.tsx, TrendChart.tsx, metrics.ts, biz.ts   dashboard and business engine
-src/admin/admin.js    the original DOM-based screens, being ported
+src/admin/ItemModal.tsx, ProductEditor.tsx, AdminUi.tsx   shared popups
+src/admin/ui/         Modal, ConfirmDelete, ImagePicker, CSV, toast
 src/admin/admin.css, shell.css
 
 sql/01-schema.sql     tables, triggers, functions, RLS, grants, storage

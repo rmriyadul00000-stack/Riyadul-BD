@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { Link } from 'react-router';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { RB_DB, rbPromoState } from '../lib/db';
 import type { Customer, Message, Order, OrderStatus, Product, Settings } from '../lib/types';
 import { AdminIcon } from './AdminIcon';
@@ -9,7 +9,7 @@ import { money, moneyD, whenFull } from './format';
 import { bucketSeries, previousWindow, periodWindow, pctChange, type RangeKey } from './metrics';
 import { TrendChart } from './TrendChart';
 import { useAdminGo } from './Shell';
-import { openItem } from './admin.js';
+import { useAdminUi } from './AdminUi';
 import { CustomerTag } from './ui/bits';
 
 const DAY = 864e5;
@@ -47,12 +47,13 @@ function Delta({ curr, prev }: { curr: number; prev: number | null | undefined }
 }
 
 function Bars({ rows, fmt }: { rows: { label: string; sub?: string; value: number; item?: string }[]; fmt: (n: number) => string }) {
+  const { openItem } = useAdminUi();
   const max = Math.max(1, ...rows.map(r => r.value));
   return (
     <div className="d-bars">
       {rows.map(r => (
         <div className="d-bar" key={r.label} title={`${r.label} — ${fmt(r.value)}`} data-item={r.item}
-          onClick={r.item ? () => openItem(r.item) : undefined} style={r.item ? { cursor: 'pointer' } : undefined}>
+          onClick={r.item ? () => openItem(r.item!) : undefined} style={r.item ? { cursor: 'pointer' } : undefined}>
           <span className="d-bar-label">{r.label}{r.sub && <small>{r.sub}</small>}</span>
           <span className="d-bar-track"><span className="d-bar-fill" style={{ width: `${Math.max(1.5, r.value / max * 100).toFixed(1)}%` }} /></span>
           <b className="d-bar-value">{fmt(r.value)}</b>
@@ -71,7 +72,7 @@ const Minus = ({ n }: { n: number }) => (n ? <span className="neg">−{moneyD(n)
    3. Where is the money?       → profit statement, aisles, best sellers, stock */
 export default function Dashboard() {
   const go = useAdminGo();
-  const qc = useQueryClient();
+  const { openItem } = useAdminUi();
   const { data, isLoading, error } = useDashData();
   const [range, setRange] = useState<RangeKey>('30d');
   const [from, setFrom] = useState('');
@@ -144,7 +145,6 @@ export default function Dashboard() {
     };
   }, [data, range, from, to, go]);
 
-  const changed = () => void qc.invalidateQueries({ queryKey: ['dash-data'] });
   const hour = new Date().getHours();  
   const hello = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
 
@@ -297,8 +297,8 @@ export default function Dashboard() {
           <div className="d-card-head"><h3>Stock to watch</h3><Link className="link-btn" to="/admin/inventory">Inventory →</Link></div>
           {view.stockRows.length ? (
             <ul className="d-stock">{view.stockRows.map(({ p, name }) => (
-              <li key={p.id} tabIndex={0} role="button" onClick={() => openItem(p.id, { onChange: changed })}
-                onKeyDown={e => { if (e.key === 'Enter') openItem(p.id, { onChange: changed }); }}>
+              <li key={p.id} tabIndex={0} role="button" onClick={() => openItem(p.id)}
+                onKeyDown={e => { if (e.key === 'Enter') openItem(p.id); }}>
                 <span><b>{p.name}</b><small>{name}</small></span>
                 <span className={'pill ' + (stockOf(p) === 0 ? 'zero' : 'low')}>{stockOf(p) === 0 ? 'Sold out' : `${stockOf(p)} left`}</span>
               </li>))}</ul>

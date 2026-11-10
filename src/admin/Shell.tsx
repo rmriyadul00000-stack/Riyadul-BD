@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router';
 import { useQuery } from '@tanstack/react-query';
 import { RB_DB } from '../lib/db';
@@ -6,7 +6,7 @@ import { AdminIcon } from './AdminIcon';
 import { useAdmin } from './auth';
 import { NAV_GROUPS, NAV_LABEL } from './nav';
 import { searchAdmin, type SearchHit } from './search';
-import { initLegacyDom, setLegacyNavigate } from './admin.js';
+import { AdminUiProvider, useAdminUi } from './AdminUi';
 
 /** Navigate to an admin screen; `arg` carries "open this order / customer / status" to the screen. */
 export function useAdminGo() {
@@ -69,6 +69,7 @@ function Sidebar() {
 /* mounted only while open, so every opening starts with an empty query */
 function Palette({ onClose }: { onClose: () => void }) {
   const go = useAdminGo();
+  const ui = useAdminUi();
   const [q, setQ] = useState('');
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [at, setAt] = useState(0);
@@ -80,11 +81,11 @@ function Palette({ onClose }: { onClose: () => void }) {
   useEffect(() => {
     const mine = ++seq.current;
     const t = setTimeout(async () => {
-      const r = await searchAdmin(q, go).catch(() => []);
+      const r = await searchAdmin(q, go, ui.openItem).catch(() => []);
       if (mine === seq.current) { setHits(r); setAt(0); }
     }, q ? 90 : 0);
     return () => clearTimeout(t);
-  }, [q, go]);
+  }, [q, go, ui]);
 
   const pick = (i: number) => { const h = hits[i]; if (h) { onClose(); h.run(); } };
   const shown = hits.map((h, i) => ({ h, i, head: i === 0 || hits[i - 1].group !== h.group }));
@@ -168,32 +169,16 @@ function ModeBar() {
   );
 }
 
-/* Markup the original DOM-based screens write into (modal, toasts). React never re-renders it. */
-const LegacyChrome = memo(function LegacyChrome(): ReactNode {
-  return (
-    <>
-      <div className="scrim" id="scrim" />
-      <div className="modal" id="modal" role="dialog" aria-modal="true">
-        <div className="modal-card">
-          <div className="modal-head"><h2 id="modal-title" style={{ fontSize: '1.15rem' }} /><button className="x" id="modal-x" aria-label="Close">×</button></div>
-          <div className="modal-body" id="modal-body" />
-          <div className="modal-foot" id="modal-foot" />
-        </div>
-      </div>
-      <div className="toasts" id="toasts" />
-    </>
-  );
-});
-
 export function Shell() {
+  return <AdminUiProvider><ShellInner /></AdminUiProvider>;
+}
+
+function ShellInner() {
   const [palette, setPalette] = useState(false);
   const { pathname } = useLocation();
   const [menuAt, setMenuAt] = useState<string | null>(null);   // drawer open for this path only: any navigation closes it
   const menu = menuAt === pathname;
-  const go = useAdminGo();
 
-  useEffect(() => { setLegacyNavigate(go); }, [go]);
-  useEffect(() => { initLegacyDom(); }, []);
   useEffect(() => { document.body.classList.toggle('side-open', menu); }, [menu]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -215,7 +200,7 @@ export function Shell() {
         <Outlet />
       </div>
       {palette && <Palette onClose={() => setPalette(false)} />}
-      <LegacyChrome />
+      <div className="toasts" id="toasts" />
     </div>
   );
 }

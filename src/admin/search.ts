@@ -1,7 +1,7 @@
 import { RB_DB } from '../lib/db';
 import { NAV_ITEMS } from './nav';
 import { money } from './format';
-import { minEffPrice, openItem } from './admin.js';
+import { minEffPrice } from './productHelpers';
 import type { Customer, Order, Product } from '../lib/types';
 
 export interface SearchHit { group: string; title: string; sub?: string; run: () => void }
@@ -9,7 +9,7 @@ export interface SearchHit { group: string; title: string; sub?: string; run: ()
 let cache: { at: number; orders: Order[]; customers: Customer[]; products: Product[] } | null = null;
 
 /** One search for the whole panel: pages, orders, customers and products. */
-export async function searchAdmin(q: string, go: (key: string, arg?: unknown) => void): Promise<SearchHit[]> {
+export async function searchAdmin(q: string, go: (key: string, arg?: unknown) => void, openItem: (id: string) => void): Promise<SearchHit[]> {
   if (!cache || Date.now() - cache.at > 30_000) {
     const [o, c, p] = await Promise.all([RB_DB.allOrders(), RB_DB.customers(), RB_DB.products(true)]);
     cache = { at: Date.now(), orders: o.ok ? o.data : [], customers: c.ok ? c.data : [], products: p.ok ? p.data : [] };

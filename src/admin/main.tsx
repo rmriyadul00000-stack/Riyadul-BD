@@ -7,13 +7,16 @@ import './shell.css';
 import { AdminGate } from './auth';
 import { Shell } from './Shell';
 import Dashboard from './Dashboard';
-import { LegacyView } from './LegacyView';
 import Orders from './screens/Orders';
 import Customers from './screens/Customers';
 import Hero from './screens/Hero';
 import Coupons from './screens/Coupons';
 import Messages from './screens/Messages';
 import Settings from './screens/Settings';
+import Products from './screens/Products';
+import Categories from './screens/Categories';
+import HotDeals from './screens/HotDeals';
+import Inventory from './screens/Inventory';
 import { NAV_KEYS } from './nav';
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { refetchOnWindowFocus: false, retry: 1 } } });
@@ -39,7 +42,11 @@ function App() {
             <Route path="coupons" element={<Coupons />} />
             <Route path="messages" element={<Messages />} />
             <Route path="settings" element={<Settings />} />
-            <Route path=":view" element={<LegacyView />} />
+            <Route path="products" element={<Products />} />
+            <Route path="categories" element={<Categories />} />
+            <Route path="hotdeals" element={<HotDeals />} />
+            <Route path="inventory" element={<Inventory />} />
+            <Route path="*" element={<Navigate to="/admin/dash" replace />} />
           </Route>
           <Route path="*" element={<LegacyHash />} />
         </Routes>
