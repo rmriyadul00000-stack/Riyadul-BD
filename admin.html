@@ -8,70 +8,11 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Karla:wght@400;600;700;800&family=Fraunces:opsz,wght@9..144,500;9..144,600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="/src/admin/admin.css">
-<link rel="stylesheet" href="/src/admin/shell.css">
 <link rel="icon" href="/assets/img/logo.svg">
 <script>try{var t=localStorage.getItem("rb.admin.theme");if(t)document.documentElement.dataset.theme=t}catch(e){}</script>
 </head>
 <body class="admin">
-
-  <!-- ===================== SIGN-IN GATE ===================== -->
-  <div class="gate" id="gate">
-    <div class="gate-card">
-      <h1>Riyadul BD <span class="mode-pill preview hide" id="gate-badge"></span></h1>
-      <p id="gate-hint">Checking access…</p>
-      <form id="gate-form">
-        <div class="field" id="email-field">
-          <label for="g-email">Email</label>
-          <input id="g-email" type="email" autocomplete="username" placeholder="you@riyadulbd.com">
-        </div>
-        <div class="field">
-          <label for="g-pass">Password</label>
-          <input id="g-pass" type="password" autocomplete="current-password">
-        </div>
-        <p class="hide" id="gate-error" style="color:var(--a-red);font-size:.85rem;margin:0 0 12px"></p>
-        <button class="btn" type="submit" style="width:100%;justify-content:center">Sign in</button>
-        <button class="btn ghost hide" type="button" id="gate-retry" style="width:100%;justify-content:center;margin-top:8px">Check the database again</button>
-      </form>
-    </div>
-  </div>
-
-  <!-- ===================== ADMIN SHELL ===================== -->
-  <div class="shell hide" id="shell">
-    <nav class="side" id="side" aria-label="Admin sections"></nav>
-    <div class="side-scrim" id="side-scrim"></div>
-    <div class="frame">
-      <header class="topbar" id="topbar"></header>
-      <div class="modebar hide" id="modebar"></div>
-      <main class="main" id="view"></main>
-    </div>
-  </div>
-
-  <!-- ===================== SEARCH PALETTE ===================== -->
-  <div class="palette" id="palette" role="dialog" aria-modal="true" aria-label="Search">
-    <div class="palette-card">
-      <input id="palette-q" type="search" placeholder="Search orders, customers, products or pages…" autocomplete="off" spellcheck="false">
-      <div class="palette-list" id="palette-list"></div>
-      <div class="palette-foot"><span><kbd>↑</kbd><kbd>↓</kbd> move</span><span><kbd>Enter</kbd> open</span><span><kbd>Esc</kbd> close</span></div>
-    </div>
-  </div>
-
-  <!-- ===================== MODAL ===================== -->
-  <div class="scrim" id="scrim"></div>
-  <div class="modal" id="modal" role="dialog" aria-modal="true">
-    <div class="modal-card">
-      <div class="modal-head">
-        <h2 id="modal-title" style="font-size:1.15rem"></h2>
-        <button class="x" id="modal-x" aria-label="Close">×</button>
-      </div>
-      <div class="modal-body" id="modal-body"></div>
-      <div class="modal-foot" id="modal-foot"></div>
-    </div>
-  </div>
-
-  <div class="toasts" id="toasts"></div>
-
-  <script>window.RB_IS_ADMIN = true;</script>
-  <script type="module" src="/src/admin/main.js"></script>
+  <div id="root"></div>
+  <script type="module" src="/src/admin/main.tsx"></script>
 </body>
 </html>

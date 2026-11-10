@@ -66,12 +66,13 @@ kbd{font:600 .72rem/1 "Karla",system-ui,sans-serif;padding:3px 6px;border:1px so
 .side .mark svg{width:22px;height:22px;color:#6FCF97}
 .side-nav{flex:1;overflow:auto;padding:4px 12px 12px}
 .side .group-label{font-size:.68rem;letter-spacing:.1em;text-transform:uppercase;color:var(--a-mute-2);padding:16px 10px 6px;font-weight:700}
-.side button[data-nav]{padding:9px 10px;border-radius:9px;color:#C9D8CF;font-weight:600;position:relative}
-.side button[data-nav]:hover{background:rgba(255,255,255,.06);color:#fff}
-.side button[data-nav].on{background:var(--a-leaf);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.25)}
+.side .nav-btn{display:flex;align-items:center;gap:10px;width:100%;padding:9px 10px;border:0;border-radius:9px;background:transparent;color:#C9D8CF;font:inherit;font-weight:600;position:relative;text-decoration:none;cursor:pointer}
+.side .nav-btn svg{width:18px;height:18px;flex:0 0 auto}
+.side .nav-btn:hover{background:rgba(255,255,255,.06);color:#fff}
+.side .nav-btn.on{background:var(--a-leaf);color:#fff;box-shadow:0 4px 14px rgba(0,0,0,.25)}
 .side .lbl{flex:1}
 .side .count{min-width:22px;text-align:center;font-size:.7rem;font-weight:800;padding:2px 7px;border-radius:99px;background:#E3A008;color:#1B1400}
-.side button.on .count{background:#fff;color:#14331F}
+.side .nav-btn.on .count{background:#fff;color:#14331F}
 .side-user{display:flex;align-items:center;gap:10px;padding:12px 14px;border-top:1px solid #1B3526}
 .side-user .avatar{flex:0 0 34px;height:34px;border-radius:50%;display:grid;place-items:center;background:#1F4A31;color:#BDE5CB;font-weight:800}
 .side-user .who{flex:1;min-width:0;line-height:1.25}

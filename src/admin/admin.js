@@ -10,41 +10,17 @@
    and nothing is sent anywhere.
    ============================================================ */
 
-import { RB_DB, rbUnitCost, rbPromoState, rbEffPrice, rbResolveForShop, resetLocalData } from '../lib/db.js';
-import { forgetBackendProbe } from '../lib/backend';
-import { dashView } from './dashboard.js';
-import { initShell, setShellView, setShellCounts } from './shell.js';
+import { RB_DB, rbUnitCost, rbPromoState, rbEffPrice, rbResolveForShop } from '../lib/db';
+import { loadBiz, analyze } from './biz';
+import { esc, money, moneyD, when, whenFull } from './format';
 
-const DEMO_PASS = 'riyadul2026';
+const DEMO_PASS = 'riyadul2026';   // preview passcode; also used to confirm logo changes in preview
 const $ = (s, r) => (r || document).querySelector(s);
 const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
-const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const money = n => '৳' + Number(n || 0).toLocaleString('en-BD', { maximumFractionDigits: 0 });
-const when = d => d ? new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-const whenFull = d => d ? new Date(d).toLocaleString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const slugify = s => String(s).toLowerCase().trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').slice(0, 60);
 
-const ICON = {
-  gear: '<circle cx="12" cy="12" r="3" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M19.4 13.5a1.7 1.7 0 0 0 .34 1.87l.06.06a2.06 2.06 0 1 1-2.92 2.92l-.06-.06a1.7 1.7 0 0 0-1.87-.34 1.7 1.7 0 0 0-1 1.55V19.6a2.06 2.06 0 1 1-4.12 0v-.09a1.7 1.7 0 0 0-1.11-1.55 1.7 1.7 0 0 0-1.87.34l-.06.06a2.06 2.06 0 1 1-2.92-2.92l.06-.06a1.7 1.7 0 0 0 .34-1.87 1.7 1.7 0 0 0-1.55-1H4.4a2.06 2.06 0 1 1 0-4.12h.09a1.7 1.7 0 0 0 1.55-1.11 1.7 1.7 0 0 0-.34-1.87l-.06-.06a2.06 2.06 0 1 1 2.92-2.92l.06.06a1.7 1.7 0 0 0 1.87.34H10.6a1.7 1.7 0 0 0 1-1.55V4.4a2.06 2.06 0 1 1 4.12 0v.09a1.7 1.7 0 0 0 1 1.55 1.7 1.7 0 0 0 1.87-.34l.06-.06a2.06 2.06 0 1 1 2.92 2.92l-.06.06a1.7 1.7 0 0 0-.34 1.87v.09a1.7 1.7 0 0 0 1.55 1H19.6a2.06 2.06 0 1 1 0 4.12h-.09a1.7 1.7 0 0 0-1.55 1Z" stroke="currentColor" stroke-width="1.3" fill="none" stroke-linejoin="round"/>',
-  home: '<path d="M4 11 12 4l8 7v8a1 1 0 0 1-1 1h-4v-6H9v6H5a1 1 0 0 1-1-1v-8Z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/>',
-  box: '<path d="M4 8 12 4l8 4v8l-8 4-8-4V8Z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/><path d="m4 8 8 4 8-4M12 12v8" stroke="currentColor" stroke-width="1.7" fill="none"/>',
-  tag: '<path d="M4 12V5a1 1 0 0 1 1-1h7l8 8-8 8-8-8Z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/><circle cx="8.5" cy="8.5" r="1.4" fill="currentColor"/>',
-  cart: '<path d="M3 4h2.2l2.3 11.4a2 2 0 0 0 2 1.6h7.7a2 2 0 0 0 2-1.5L21 8H6" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"/><circle cx="10" cy="20" r="1.4" fill="currentColor"/><circle cx="18" cy="20" r="1.4" fill="currentColor"/>',
-  users: '<circle cx="9" cy="8" r="3.4" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M3 20a6 6 0 0 1 12 0" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M16 5.5a3.4 3.4 0 0 1 0 6.6M17.5 20a6 6 0 0 0-2-4.5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/>',
-  image: '<rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.7" fill="none"/><circle cx="8.5" cy="10" r="1.6" fill="currentColor"/><path d="m4 17 5-4.5 4 3.5 3-2.5 4 3.5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/>',
-  ticket: '<path d="M3 9a2 2 0 0 0 0 6v3h18v-3a2 2 0 0 1 0-6V6H3v3Z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/><path d="M12 7v10" stroke="currentColor" stroke-width="1.5" stroke-dasharray="2 3"/>',
-  mail: '<rect x="3" y="5" width="18" height="14" rx="2" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="m4 7 8 6 8-6" stroke="currentColor" stroke-width="1.7" fill="none"/>',
-  leaf: '<path d="M4 20c0-8 6-14 16-15 0 10-6 15-14 15" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/>',
-  out: '<path d="M15 5V4a1 1 0 0 0-1-1H5a1 1 0 0 0-1 1v16a1 1 0 0 0 1 1h9a1 1 0 0 0 1-1v-1" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round"/><path d="M10 12h10m0 0-3-3m3 3-3 3" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
-  flame: '<path d="M12 3c1 3.5 5 5.2 5 10a5 5 0 0 1-10 0c0-2 1-3.2 2-4.2.2 1.6 1 2.4 1.8 2.6C10.3 9 10.6 5.6 12 3Z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/>',
-  search: '<circle cx="11" cy="11" r="6.5" stroke="currentColor" stroke-width="1.8" fill="none"/><path d="m16 16 4.5 4.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>',
-  menu: '<path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>',
-  sun: '<circle cx="12" cy="12" r="4" stroke="currentColor" stroke-width="1.7" fill="none"/><path d="M12 2.5v2.5M12 19v2.5M2.5 12H5M19 12h2.5M5.3 5.3l1.8 1.8M16.9 16.9l1.8 1.8M5.3 18.7l1.8-1.8M16.9 7.1l1.8-1.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/>',
-  moon: '<path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5Z" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linejoin="round"/>',
-  ext: '<path d="M14 5h5v5M19 5l-8 8M11 6H6a1 1 0 0 0-1 1v11a1 1 0 0 0 1 1h11a1 1 0 0 0 1-1v-5" stroke="currentColor" stroke-width="1.7" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
-  refresh: '<path d="M20 12a8 8 0 1 1-2.6-5.9M20 4v5h-5" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>',
-  chart: '<path d="M4 20V10M11 20V4M18 20v-7" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round"/>'
-};
+import { ICON } from './icons';
+
 const svg = n => `<svg viewBox="0 0 24 24" aria-hidden="true">${ICON[n] || ''}</svg>`;
 
 const ORDER_STEPS = ['pending', 'confirmed', 'shipped', 'delivered'];
@@ -123,10 +99,6 @@ const modal = {
   },
   close() { $('#modal').classList.remove('on'); $('#scrim').classList.remove('on'); }
 };
-$('#modal-x').onclick = () => modal.close();
-$('#scrim').onclick = () => modal.close();
-document.addEventListener('keydown', e => { if (e.key === 'Escape') modal.close(); });
-
 function confirmDelete(what, onYes) {
   modal.open('Delete ' + what, `<p>This removes <b>${esc(what)}</b> for good. There is no undo.</p>`,
     `<button class="btn ghost" id="cd-no">Keep it</button><button class="btn red" id="cd-yes">Delete</button>`);
@@ -142,154 +114,40 @@ function progressLine(status) {
     `<span class="pstep ${i < at ? 'done' : i === at ? 'now' : ''}">${s[0].toUpperCase() + s.slice(1)}</span>`).join('')}</div>`;
 }
 
-/* ===================== GATE ===================== */
-(async function gate() {
-  const form = $('#gate-form'), err = $('#gate-error');
-  const mode = await RB_DB.ready;
+/* ===================== BRIDGE TO THE REACT SHELL =====================
+   The screens below are the original DOM-based admin views. The React shell
+   (sidebar, top bar, sign-in, dashboard, routing) hosts them: it renders the
+   #view container and the modal markup, calls mountView(), and passes in a
+   navigate function. Screens are being ported to React one by one. */
+let navigate = () => {};
+export function setLegacyNavigate(fn) { navigate = fn; }
+const go = (key, arg) => navigate(key, arg);
 
-  if (mode !== 'live') {
-    $('#email-field').classList.add('hide');
-    $('#gate-badge').textContent = 'Preview';
-    $('#gate-badge').classList.remove('hide');
-    $('#gate-hint').innerHTML = (mode === 'offline'
-      ? 'The database is paused or unreachable, so this is a <b>preview with sample data</b> kept in this browser. Real orders and customers return when the database is resumed.'
-      : 'No database is connected, so this is a <b>preview with sample data</b> kept in this browser.')
-      + '<br>Preview passcode: <code>' + DEMO_PASS + '</code>';
-    if (mode === 'offline') $('#gate-retry').classList.remove('hide');
-    $('#gate-retry').onclick = () => { forgetBackendProbe(); location.reload(); };
-    if (sessionStorage.getItem('rb.admin') === 'ok') return boot({ email: 'preview' });
-    form.onsubmit = e => {
-      e.preventDefault();
-      if ($('#g-pass').value !== DEMO_PASS) {
-        err.textContent = 'Wrong passcode.'; err.classList.remove('hide'); return;
-      }
-      sessionStorage.setItem('rb.admin', 'ok');
-      boot({ email: 'preview' });
-    };
-    return;
-  }
-
-  $('#email-field').classList.remove('hide');
-  $('#gate-hint').textContent = 'Sign in with your admin account.';
-  const already = await RB_DB.currentAdmin();
-  if (already) return boot(already);
-
-  form.onsubmit = async e => {
-    e.preventDefault();
-    err.classList.add('hide');
-    const btn = form.querySelector('button');
-    btn.disabled = true; btn.textContent = 'Checking…';
-    const r = await RB_DB.adminLogin({ email: $('#g-email').value.trim(), password: $('#g-pass').value });
-    btn.disabled = false; btn.textContent = 'Sign in';
-    if (!r.ok) { err.textContent = r.error; err.classList.remove('hide'); return; }
-    boot(r.data);
-  };
-})();
-
-const NAV_GROUPS = [
-  { label: 'Overview', items: [['dash', 'Dashboard', 'home']] },
-  { label: 'Sales', items: [['orders', 'Orders', 'cart'], ['customers', 'Customers', 'users'], ['messages', 'Messages', 'mail']] },
-  { label: 'Catalog', items: [['products', 'Products', 'box'], ['categories', 'Categories', 'tag'],
-      ['inventory', 'Inventory', 'chart'], ['hotdeals', 'Hot Deals', 'flame'], ['coupons', 'Discount codes', 'ticket']] },
-  { label: 'Storefront', items: [['hero', 'Hero slides', 'image'], ['settings', 'Settings', 'gear']] }
-];
-const NAV_KEYS = NAV_GROUPS.flatMap(g => g.items.map(([k]) => k));
-const NAV_LABEL = Object.fromEntries(NAV_GROUPS.flatMap(g => g.items.map(([k, l]) => [k, l])));
-
-function signOut() {
-  sessionStorage.removeItem('rb.admin');
-  RB_DB.logout().then(() => location.reload());
+let domReady = false;
+export function initLegacyDom() {
+  if (domReady) return;
+  domReady = true;
+  $('#modal-x').onclick = () => modal.close();
+  $('#scrim').onclick = () => modal.close();
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') modal.close(); });
 }
 
-function boot(admin) {
-  window.RB_ADMIN = admin;
-  $('#gate').classList.add('hide');
-  $('#shell').classList.remove('hide');
-  initShell({
-    groups: NAV_GROUPS, labels: NAV_LABEL, svg, esc, admin, mode: RB_DB.mode, go, signOut, toast,
-    search: globalSearch,
-    resetPreview: () => { resetLocalData(); location.reload(); },
-    retryBackend: () => { forgetBackendProbe(); location.reload(); }
-  });
-  /* Reload (or a bookmarked/shared link) should land back on whichever
-     page was open, not always Dashboard — the page key lives in the URL
-     hash, restored here, kept in sync by go() below. */
-  const hashKey = location.hash.slice(1);
-  go(NAV_KEYS.includes(hashKey) ? hashKey : 'dash');
-  refreshSideCounts();
-  window.addEventListener('hashchange', () => {
-    const k = location.hash.slice(1);
-    if (NAV_KEYS.includes(k) && k !== window.RB_CURRENT_VIEW) go(k);
-  });
-}
-
-/* badge counts next to nav items — the three things an admin should
-   notice before clicking in: orders waiting, unread messages, stock alerts */
-async function refreshSideCounts() {
-  try {
-    const [or_, pr, sr, mr] = await Promise.all([RB_DB.allOrders(), RB_DB.products(true), RB_DB.settings(), RB_DB.messages()]);
-    const orders = or_.data || [], products = pr.data || [];
-    const threshold = Number((sr.data || {}).low_stock_threshold || 5);
-    const stockOf = p => (p.variants || []).reduce((s, v) => s + (Number(v.stock) || 0), 0);
-    setShellCounts({
-      orders: orders.filter(o => o.status === 'pending').length,
-      inventory: products.filter(p => stockOf(p) <= threshold).length,
-      messages: (mr.data || []).filter(m => m.sender !== 'admin' && !m.read_by_admin).length
-    });
-  } catch {}
-}
-
-/* one search box for the whole panel: pages, orders, customers, products */
-let searchCache = null;
-async function globalSearch(q) {
-  if (!searchCache || Date.now() - searchCache.at > 30000) {
-    const [or_, cr, pr] = await Promise.all([RB_DB.allOrders(), RB_DB.customers(), RB_DB.products(true)]);
-    searchCache = { at: Date.now(), orders: or_.data || [], customers: cr.data || [], products: pr.data || [] };
-  }
-  const s = q.trim().toLowerCase(), has = (...v) => v.some(x => String(x || '').toLowerCase().includes(s));
-  const out = NAV_KEYS.filter(k => !s || NAV_LABEL[k].toLowerCase().includes(s))
-    .map(k => ({ group: 'Pages', title: NAV_LABEL[k], run: () => go(k) }));
-  if (s.length < 2) return out;
-  searchCache.orders.filter(o => has(o.order_code, o.contact_name, o.contact_phone, o.contact_email)).slice(0, 6)
-    .forEach(o => out.push({ group: 'Orders', title: o.order_code + ' · ' + o.contact_name, sub: money(o.total) + ' · ' + o.status, run: () => go('orders', { openOrder: o.id }) }));
-  searchCache.customers.filter(c => has(c.customer_code, c.full_name, c.email, c.phone)).slice(0, 5)
-    .forEach(c => out.push({ group: 'Customers', title: (c.full_name || c.email || 'Customer') + ' · ' + c.customer_code, sub: c.phone || c.email || '', run: () => go('customers', { openCustomer: c.id }) }));
-  searchCache.products.filter(p => has(p.name, p.name_bn, p.sku, p.farm)).slice(0, 6)
-    .forEach(p => out.push({ group: 'Products', title: p.name, sub: (p.sku || '') + ' · ' + money(minEffPrice(p)), run: () => openItem(p.id) }));
-  return out;
-}
-
-function go(key, arg) {
+export function mountView(key, arg) {
   if (window.RB_POLL_TIMER) { clearInterval(window.RB_POLL_TIMER); window.RB_POLL_TIMER = null; }
-  if (!views[key]) key = 'dash';
   window.RB_CURRENT_VIEW = key;
-  try { history.replaceState(null, '', '#' + key); } catch {}
-  setShellView(key);
-  /* a view's delegated handlers must not outlive it */
   const view = $('#view');
-  view.onclick = null; view.onchange = null; view.oninput = null;
-  Promise.resolve()
-    .then(() => views[key](arg))
-    .then(() => { if (key !== 'dash') refreshSideCounts(); })
-    .catch(err => {
-      console.error('View failed to load:', key, err);
-      $('#view').innerHTML = `<div class="bar"><div><h1>Couldn't load this page</h1>
-        <p>${esc((err && err.message) || String(err))}</p></div>
-        <button class="btn" id="retry-view">Try again</button></div>`;
-      const r = $('#retry-view'); if (r) r.onclick = () => go(key, arg);
-    });
-  window.scrollTo({ top: 0 });
+  view.onclick = null; view.onchange = null; view.oninput = null; view.onkeydown = null;
+  return views[key](arg);
 }
-window.rbGo = go;
+export function unmountView() {
+  if (window.RB_POLL_TIMER) { clearInterval(window.RB_POLL_TIMER); window.RB_POLL_TIMER = null; }
+  window.RB_CURRENT_VIEW = null;
+  modal.close();
+}
+export const legacyKeys = () => Object.keys(views);
 
 /* ===================== VIEWS ===================== */
 const views = {};
-
-/* ---------- dashboard (see dashboard.js) ---------- */
-views.dash = () => dashView({
-  $, esc, money, moneyD, whenFull, svg, go, openItem, loadBiz, analyze, upgradeBanner, customerTag,
-  STATUSES, ORDER_STEPS, setCounts: setShellCounts
-});
 
 const customerTag = o => o.is_guest
   ? '<span class="pill guest">GUEST</span>'
@@ -1208,7 +1066,6 @@ const LOG_LABEL = { purchase: 'Stock in', adjustment: 'Adjustment', wastage: 'Wa
 const LOG_PILL = { purchase: 'confirmed', adjustment: 'shipped', wastage: 'cancelled', expense: 'low', note: 'off',
   sale: 'delivered', return: 'pending', price_change: 'shipped', cost_change: 'shipped' };
 
-const moneyD = n => '৳' + Number(n || 0).toLocaleString('en-BD', { maximumFractionDigits: 2 });
 const sgn = n => (n > 0 ? 'pos' : n < 0 ? 'neg' : '');
 const profitTxt = n => `<b class="${sgn(n)}">${n < 0 ? '−' : ''}${moneyD(Math.abs(n))}</b>`;
 const pctTxt = n => n == null ? '—' : (Math.round(n * 10) / 10) + '%';
@@ -1233,88 +1090,10 @@ const promoBadge = p => {
 const minEffPrice = p => Math.min(...((p.variants || []).length ? p.variants.map(v => rbEffPrice(p, v)) : [0]));
 const minDefPrice = p => Math.min(...((p.variants || []).length ? p.variants.map(v => Number(v.price) || 0) : [0]));
 
-async function loadBiz() {
-  const [pr, cr, or_, lg] = await Promise.all([
-    RB_DB.products(true), RB_DB.categories(true), RB_DB.allOrders(), RB_DB.inventoryLog()
-  ]);
-  return {
-    products: pr.data || [], cats: cr.data || [], orders: or_.data || [], logs: lg.data || [],
-    needsUpgrade: lg.ok === false
-  };
-}
 const upgradeBanner = biz => biz.needsUpgrade ? `
   <div class="notice"><b>One-time database step needed.</b> Run <code>sql/pending/2026-11-10_run_when_supabase_resumes.sql</code> in the Supabase SQL editor to switch on
   cost history, wastage, expenses and real profit tracking. Until then this page shows costs and stock but no history.</div>` : '';
 
-/* range = { from: Date|null, to: Date|null } applies to sales, wastage and expenses.
-   Stock and potential figures are always "right now". */
-function analyze(biz, range) {
-  const { products, orders, logs } = biz;
-  const from = range && range.from ? +range.from : null, to = range && range.to ? +range.to : null;
-  const inR = t => { t = +new Date(t); return (!from || t >= from) && (!to || t <= to); };
-  const pById = {}; products.forEach(p => { pById[p.id] = p; });
-  const blank = () => ({ units: 0, revenue: 0, cogs: 0, estUnits: 0, pUnits: 0, pRevenue: 0, pCogs: 0,
-    wasteQty: 0, waste: 0, expenses: 0, coupons: 0, stockUnits: 0, stockCost: 0, stockValue: 0 });
-  const P = {}, V = {}, C = {}, tot = blank();
-  const get = (m, k) => m[k] || (m[k] = blank());
-  const monthly = {};   // 'YYYY-MM' -> { revenue, cogs } for delivered orders
-
-  orders.forEach(o => {
-    if (o.status === 'cancelled' || !inR(o.placed_at)) return;
-    const real = o.status === 'delivered';
-    if (real) tot.coupons += Number(o.discount) || 0;
-    (o.items || []).forEach(it => {
-      const p = pById[it.product_id] || products.find(x => x.name === it.product_name);
-      const v = p && (p.variants || []).find(x => x.label === it.variant_label);
-      const est = it.unit_cost == null;
-      const uc = est ? (v ? rbUnitCost(v) : 0) : Number(it.unit_cost) || 0;
-      const q = Number(it.qty) || 0, rev = (Number(it.unit_price) || 0) * q, cg = uc * q;
-      const targets = [tot];
-      if (p) targets.push(get(P, p.id), get(V, p.id + '|' + it.variant_label), get(C, p.cat));
-      targets.forEach(t => {
-        if (real) { t.units += q; t.revenue += rev; t.cogs += cg; if (est) t.estUnits += q; }
-        else { t.pUnits += q; t.pRevenue += rev; t.pCogs += cg; }
-      });
-      if (real && p) {
-        const k = new Date(o.placed_at).toISOString().slice(0, 7);
-        const m = monthly[k] || (monthly[k] = { revenue: 0, cogs: 0, byCat: {}, byProd: {} });
-        m.revenue += rev; m.cogs += cg;
-        (m.byProd[p.id] = m.byProd[p.id] || { revenue: 0, cogs: 0 }).revenue += rev; m.byProd[p.id].cogs += cg;
-        (m.byCat[p.cat] = m.byCat[p.cat] || { revenue: 0, cogs: 0 }).revenue += rev; m.byCat[p.cat].cogs += cg;
-      }
-    });
-  });
-
-  logs.forEach(l => {
-    if (!inR(l.created_at)) return;
-    const p = pById[l.product_id]; if (!p) return;
-    if (l.kind === 'wastage') {
-      const q = Number(l.qty) || 0, loss = q * (Number(l.unit_cost) || 0);
-      [tot, get(P, p.id), get(V, p.id + '|' + l.variant_label), get(C, p.cat)].forEach(t => { t.wasteQty += q; t.waste += loss; });
-    } else if (l.kind === 'expense') {
-      [tot, get(P, p.id), get(C, p.cat)].forEach(t => { t.expenses += Number(l.amount) || 0; });
-    }
-  });
-
-  products.forEach(p => (p.variants || []).forEach(v => {
-    const st = Number(v.stock) || 0, uc = rbUnitCost(v), pr = rbEffPrice(p, v);
-    [tot, get(P, p.id), get(V, p.id + '|' + v.label), get(C, p.cat)].forEach(t => {
-      t.stockUnits += st; t.stockCost += st * uc; t.stockValue += st * pr;
-    });
-  }));
-
-  const fin = t => {
-    t.gross = t.revenue - t.cogs;
-    t.net = t.gross - t.waste - t.expenses;
-    t.margin = t.revenue ? t.gross / t.revenue * 100 : null;
-    t.pGross = t.pRevenue - t.pCogs;
-    t.potential = t.stockValue - t.stockCost;
-    return t;
-  };
-  fin(tot); tot.net -= tot.coupons;
-  Object.values(P).forEach(fin); Object.values(V).forEach(fin); Object.values(C).forEach(fin);
-  return { tot, P, V, C, monthly, pById, blank: () => fin(blank()) };
-}
 
 /* ---------- item detail popup: overview, costs, stock + history, notes, performance ---------- */
 async function openItem(productId, opts) {
@@ -2620,3 +2399,6 @@ views.settings = async function () {
     };
   };
 };
+
+/* what the React screens need from the legacy popups */
+export { openItem, openOrder, openCustomer, customerTag, toast, minEffPrice, upgradeBanner };

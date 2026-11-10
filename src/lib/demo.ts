@@ -6,7 +6,9 @@
    are laid out relative to today.
    ============================================================ */
 
-function rng(seed) {
+type Row = any;
+
+function rng(seed: number) {
   let a = seed >>> 0;
   return () => {
     a |= 0; a = (a + 0x6D2B79F5) | 0;
@@ -24,16 +26,16 @@ const PEOPLE = [
   ['Sharmin Sultana', 'Bashundhara, Dhaka', 'inside'], ['Jubayer Rahman', 'Gulshan, Dhaka', 'inside']
 ];
 
-export function demoDataset(seedProducts, { unitCost }) {
+export function demoDataset(seedProducts: Row[], { unitCost }: { unitCost: (v: Row) => number }): Row {
   const r = rng(20261110);
-  const pick = arr => arr[Math.floor(r() * arr.length)];
+  const pick = <T,>(arr: T[]): T => arr[Math.floor(r() * arr.length)];
   const now = Date.now(), DAY = 864e5;
-  const iso = t => new Date(t).toISOString();
+  const iso = (t: number) => new Date(t).toISOString();
 
   /* give every size a landed cost so profit figures mean something */
-  const products = seedProducts.map(p => ({
+  const products: Row[] = seedProducts.map((p: Row) => ({
     ...p,
-    variants: (p.variants || []).map(v => {
+    variants: (p.variants || []).map((v: Row) => {
       const price = Number(v.price) || 0;
       const cost = Math.round(price * (0.52 + r() * 0.2));
       return { ...v, cost, cost_transport: Math.round(price * 0.03), cost_packaging: Math.round(price * 0.02) };
@@ -50,8 +52,8 @@ export function demoDataset(seedProducts, { unitCost }) {
     status: i === 6 ? 'blocked' : 'active', created_at: iso(now - (70 - i * 6) * DAY)
   }));
 
-  const orders = [], order_items = [], inventory_log = [];
-  const live = products.filter(p => p.active !== false);
+  const orders: Row[] = [], order_items: Row[] = [], inventory_log: Row[] = [];
+  const live = products.filter((p: Row) => p.active !== false);
   let code = 10001;
   for (let day = 59; day >= 0; day--) {
     /* gentle growth plus a weekend lift */
@@ -62,17 +64,17 @@ export function demoDataset(seedProducts, { unitCost }) {
       const placed = now - day * DAY - Math.floor(r() * 0.6 * DAY) - (day === 0 ? 0 : 0.2 * DAY);
       if (placed > now) continue;
       const guest = r() < 0.3;
-      const person = guest ? pick(PEOPLE) : null;
-      const cust = guest ? null : pick(customers);
-      const who = guest ? { name: person[0], where: person[1], zone: person[2] }
+      const person = pick(PEOPLE);
+      const cust: Row = guest ? null : pick(customers);
+      const who: Row = guest || !cust ? { name: person[0], where: person[1], zone: person[2] }
         : { name: cust.full_name, where: cust.address, zone: /Dhaka/.test(cust.address) ? 'inside' : 'outside' };
       const id = 'demo-o' + code;
       let subtotal = 0;
-      const lines = [], used = new Set();
+      const lines: Row[] = [], used = new Set<string>();
       const count = 1 + Math.floor(r() * 3.4);
       for (let j = 0; j < count; j++) {
         const p = pick(live); if (used.has(p.id)) continue; used.add(p.id);
-        const v = pick(p.variants), qty = 1 + Math.floor(r() * 2.6);
+        const v: Row = pick(p.variants as Row[]), qty = 1 + Math.floor(r() * 2.6);
         const price = Number(v.price) || 0;
         subtotal += price * qty;
         lines.push({ id: id + '-' + j, order_id: id, product_id: p.id, product_name: p.name, variant_label: v.label,
@@ -85,7 +87,7 @@ export function demoDataset(seedProducts, { unitCost }) {
       const discount = coupon ? Math.round(subtotal * 0.1) : 0;
       let shipping_fee = who.zone === 'outside' ? 120 : 60;
       if (subtotal >= 2000) shipping_fee = 0;
-      const order = {
+      const order: Row = {
         id, order_code: 'ORD-' + code, customer_id: cust ? cust.id : null, is_guest: guest,
         contact_name: who.name, contact_email: (cust ? cust.email : who.name.toLowerCase().replace(/\s+/g, '.') + '@example.com'),
         contact_phone: cust ? cust.phone : '018' + String(10000000 + Math.floor(r() * 89999999)),
@@ -94,7 +96,7 @@ export function demoDataset(seedProducts, { unitCost }) {
         subtotal, discount, shipping_fee, total: Math.max(0, subtotal - discount + shipping_fee),
         coupon_code: coupon ? 'FRESH10' : null, status, placed_at: iso(placed)
       };
-      const step = (h) => iso(Math.min(now, placed + h * 36e5));
+      const step = (h: number) => iso(Math.min(now, placed + h * 36e5));
       if (status !== 'pending' && status !== 'cancelled') order.confirmed_at = step(3);
       if (status === 'shipped' || status === 'delivered') order.shipped_at = step(20);
       if (status === 'delivered') order.delivered_at = step(44);
@@ -112,7 +114,7 @@ export function demoDataset(seedProducts, { unitCost }) {
    [0, 'wastage', 3, 'Wilted before sale', 21], [11, 'expense', 0, 'Cold room, one week', 9],
    [7, 'expense', 0, 'Lab purity test', 26], [3, 'purchase', 40, 'Supplier invoice 2217', 3],
    [8, 'purchase', 24, 'Weekly farm pickup', 11], [3, 'note', 0, 'Supplier switches to winter crop next month.', 2]
-  ].forEach(([pi, kind, qty, note, daysAgo], i) => {
+  ].forEach(([pi, kind, qty, note, daysAgo]: any, i: number) => {
     const p = products[pi]; if (!p) return;
     const v = p.variants[0], uc = unitCost(v);
     inventory_log.push({ id: 'demo-lgx' + i, product_id: p.id, variant_label: kind === 'expense' || kind === 'note' ? null : v.label, kind, qty,

@@ -7,14 +7,18 @@ Storage) is the back end; the front end is a Vite multi-page app.
 
 | Layer | What |
 |---|---|
-| Build | Vite 6, ES modules, TypeScript (`tsc --noEmit` runs before every build) |
-| Data | `@supabase/supabase-js` v2 from npm, wrapped by `src/lib/db.js` |
-| Tests | Vitest (`tests/`), ESLint |
-| Hosting | Netlify — `npm run build`, publishes `dist/`, one function for order email |
+| UI | React 19 (function components, hooks), React Router 8 |
+| Language | TypeScript (strict) — domain types in `src/lib/types.ts`, typed data layer |
+| Data fetching | TanStack Query 5 over the Supabase client (`@supabase/supabase-js` 2) |
+| Build | Vite 8 (Rolldown), two single-page apps: storefront (`index.html`) and admin (`admin.html`), vendor chunks cached separately |
+| Quality | ESLint 9 (typescript-eslint + React hooks rules), Vitest 5, `tsc --noEmit` before every build |
+| Hosting | Netlify — `npm run build`, publishes `dist/`, SPA routing, one function for order email |
 
-The public pages keep the same HTML structure, class names, styles and URLs as before;
-only how the scripts are loaded changed (one bundled module instead of six script tags
-and a CDN copy of Supabase).
+The storefront keeps the same markup, class names, stylesheet and URLs as the multi-page site it
+replaced (`/product/<slug>`, `/category/<aisle>`, …); the old `*.html` addresses redirect.
+
+TypeScript is on 6.0, not 7: typescript-eslint needs the JavaScript compiler API, which TypeScript 7
+(the native port) does not provide yet. Move to 7 once typescript-eslint supports it.
 
 ```bash
 npm install
@@ -24,6 +28,14 @@ npm run preview    # serve dist/ exactly as it will be deployed
 npm test           # unit tests
 npm run lint
 ```
+
+### Admin screens
+
+The shell (sign-in, sidebar, top bar, search, theme), the **dashboard** and the data layer are React +
+TypeScript. The other screens (orders, customers, products, categories, inventory, hot deals, hero,
+coupons, messages, settings) are the original DOM-based code in `src/admin/admin.js`, hosted inside the
+React shell and working as before. They are being ported to React one at a time; each moves into its
+own component without changing what it does.
 
 ## While the Supabase project is paused
 
@@ -205,34 +217,35 @@ Without the key, the function returns quietly and orders still go through.
 
 ## Shop details
 
-Phone, WhatsApp, email, address, hours and delivery charges live in one object at the top
-of `src/shop/core.js`. The delivery rule also exists in `place_order()` (inside Dhaka ৳60,
+Phone, WhatsApp, email, address, hours and delivery charges live in one object in
+`src/shop/lib/shop.ts`. The delivery rule also exists in `place_order()` (inside Dhaka ৳60,
 outside ৳120, free over ৳2,000) because the database, not the browser, decides what an
 order costs. Change both if the rates change.
 
 ## Files
 
 ```
-index.html, products.html, product.html, checkout.html,
-account.html, wishlist.html, contact.html      public pages (markup unchanged)
-admin.html                                     admin panel shell (noindex)
+index.html            storefront entry (one SPA for every shop URL)
+admin.html            admin entry (noindex), served for /admin and /admin/*
 
+src/lib/types.ts      domain types
 src/lib/config.ts     Supabase URL + publishable key (env-overridable)
 src/lib/backend.ts    "is the database answering?" probe
-src/lib/db.js         data layer: Supabase, with the browser fallback
-src/lib/seed.js       starter catalogue, icons, placeholders
-src/lib/demo.js       sample trading data for the admin preview only
+src/lib/db.ts         typed data layer: Supabase, with the browser fallback
+src/lib/seed.ts       starter catalogue, icons, placeholders
+src/lib/demo.ts       sample trading data for the admin preview only
 
-src/shop/main.js      storefront entry
-src/shop/core.js      header, footer, cart, drawer, toasts, product card
-src/shop/pages.js     one controller per public page
+src/shop/main.tsx     storefront entry: router + providers
+src/shop/components/  Layout (header, search, footer, basket drawer), ProductCard, Hero, …
+src/shop/pages/       Home, Products, ProductPage, Checkout, Account, Wishlist, Contact
+src/shop/lib/         cart store, toasts, query hooks, shop details (phone, delivery rules)
 src/shop/style.css
 
-src/admin/admin.js    orders, customers, products, categories, inventory,
-                      hot deals, hero, coupons, messages, settings
-src/admin/shell.js    sidebar, top bar, theme, search palette
-src/admin/dashboard.js  the dashboard
-src/admin/metrics.ts  date ranges, series, scales (unit-tested)
+src/admin/main.tsx    admin entry
+src/admin/auth.tsx    sign-in gate (live or preview)
+src/admin/Shell.tsx   sidebar, top bar, search palette, theme
+src/admin/Dashboard.tsx, TrendChart.tsx, metrics.ts, biz.ts   dashboard and business engine
+src/admin/admin.js    the original DOM-based screens, being ported
 src/admin/admin.css, shell.css
 
 sql/01-schema.sql     tables, triggers, functions, RLS, grants, storage
@@ -251,6 +264,9 @@ tests/
   disappear as soon as real files are uploaded from the panel.
 - Prices are in BDT and formatted with `৳` throughout.
 - The basket lives in browser storage, so it survives a reload and a closed tab.
+- Search engines: pages now render in the browser, so each page's title is set on load but its
+  description is the site-wide one. Pre-rendering product and category pages is the next step if
+  search traffic matters.
 - Known and not changed here: per-size cost fields live inside `products.variants`, which
   the public can read, so buying costs are visible to anyone who inspects the API. Moving
   them to an admin-only table is a schema change worth doing before costs are entered for

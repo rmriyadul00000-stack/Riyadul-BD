@@ -6,39 +6,21 @@
 [build.environment]
   NODE_VERSION = "22"
 
-# Clean URLs (rewrites, so the pretty URL stays in the address bar).
-# The page reads the slug / category from the path — see RB.qs in src/shop/core.js.
-[[redirects]]
-  from = "/products"
-  to = "/products.html"
-  status = 200
-[[redirects]]
-  from = "/product/:slug"
-  to = "/product.html"
-  status = 200
-[[redirects]]
-  from = "/category/:cat"
-  to = "/products.html"
-  status = 200
-[[redirects]]
-  from = "/checkout"
-  to = "/checkout.html"
-  status = 200
-[[redirects]]
-  from = "/account"
-  to = "/account.html"
-  status = 200
-[[redirects]]
-  from = "/wishlist"
-  to = "/wishlist.html"
-  status = 200
-[[redirects]]
-  from = "/contact"
-  to = "/contact.html"
-  status = 200
+# Single-page apps: the storefront is index.html, the admin panel is admin.html.
+# Real files (JS, CSS, images, sitemap, robots) are served first; everything else
+# falls through to the app, whose router owns the clean URLs
+# (/product/<slug>, /category/<aisle>, /checkout …) and redirects the old *.html ones.
 [[redirects]]
   from = "/admin"
   to = "/admin.html"
+  status = 200
+[[redirects]]
+  from = "/admin/*"
+  to = "/admin.html"
+  status = 200
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
   status = 200
 
 [[headers]]

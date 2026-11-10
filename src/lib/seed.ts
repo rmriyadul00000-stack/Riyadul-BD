@@ -6,9 +6,11 @@
 
 /* Produce-toned SVG placeholder so the shop renders before real photos
    are uploaded. Replace `images` with real URLs and this disappears. */
-const xmlEsc = t => String(t == null ? '' : t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+import type { Category, Coupon, HeroSlide, Product, Settings } from './types';
 
-function rbArt(name, a, b) {
+const xmlEsc = (t: unknown) => String(t == null ? '' : t).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' } as Record<string, string>)[c]);
+
+function rbArt(name: string, a: string, b: string): string {
   const initials = name.split(/\s+/).slice(0, 2).map(w => w[0]).join('').toUpperCase();
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 400">` +
@@ -26,7 +28,7 @@ function rbArt(name, a, b) {
 /* Inline SVG icons for the aisles. These are stored in the database
    (categories.icon_svg) and editable from the admin panel — the strings
    here are only the starting set. */
-const ICON_SVG = {
+const ICON_SVG: Record<string, string> = {
   leaf:   '<svg viewBox="0 0 24 24" fill="none"><path d="M4 20c0-8 6-14 16-15 0 10-6 15-14 15" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M4 20c2-5 6-8 10-10" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
   fruit:  '<svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="14" r="7" stroke="currentColor" stroke-width="1.7"/><path d="M12 7V4M12 4c2 0 3.5-1 4-2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>',
   grain:  '<svg viewBox="0 0 24 24" fill="none"><path d="M12 21V8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12 8c0-3 2-5 5-5 0 3-2 5-5 5ZM12 8c0-3-2-5-5-5 0 3 2 5 5 5ZM12 14c0-3 2-5 5-5 0 3-2 5-5 5ZM12 14c0-3-2-5-5-5 0 3 2 5 5 5Z" stroke="currentColor" stroke-width="1.5"/></svg>',
@@ -37,7 +39,7 @@ const ICON_SVG = {
   basket: '<svg viewBox="0 0 24 24" fill="none"><path d="M4 9h16l-1.6 10.2a2 2 0 0 1-2 1.8H7.6a2 2 0 0 1-2-1.8L4 9Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="m8.5 9 2-6M15.5 9l-2-6" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>'
 };
 
-const RB_CATEGORIES = [
+const RB_CATEGORIES: Category[] = [
   { id: 'c1', slug: 'vegetables',  name: 'Vegetables',     name_bn: 'সবজি',        icon_svg: ICON_SVG.leaf,   image_url: '', sort: 1, active: true },
   { id: 'c2', slug: 'fruits',      name: 'Fruits',         name_bn: 'ফল',          icon_svg: ICON_SVG.fruit,  image_url: '', sort: 2, active: true },
   { id: 'c3', slug: 'rice-grains', name: 'Rice & Grains',  name_bn: 'চাল ও শস্য',   icon_svg: ICON_SVG.grain,  image_url: '', sort: 3, active: true },
@@ -51,7 +53,7 @@ const RB_CATEGORIES = [
 /* Category banner placeholders — desktop (1:1) and mobile (16:9). Real
    photos replace these from the admin panel; these only exist so the
    layout looks right on day one. */
-function rbBanner(w, h, a, b, label) {
+function rbBanner(w: number, h: number, a: string, b: string, label: string): string {
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">` +
     `<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">` +
@@ -62,7 +64,7 @@ function rbBanner(w, h, a, b, label) {
     `fill="rgba(255,255,255,.88)" text-anchor="middle" dominant-baseline="middle">${xmlEsc(label)}</text></svg>`;
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
-const BANNER_TONES = {
+const BANNER_TONES: Record<string, [string, string]> = {
   vegetables: ['#2F6B3C', '#7FB069'], fruits: ['#C07A12', '#F0C04A'], 'rice-grains': ['#8A7A4E', '#D6C89A'],
   'oil-ghee': ['#A87E10', '#EFC64B'], 'honey-dates': ['#8F5A0E', '#E8A93B'], 'dairy-eggs': ['#8C8677', '#E6E0D2'],
   spices: ['#B07A05', '#F0C244'], 'dry-food': ['#9E9377', '#EDE6D0']
@@ -75,7 +77,7 @@ RB_CATEGORIES.forEach(c => {
 
 /* Header announcement bar and logo — editable from the admin panel
    (Settings). These are the defaults until an admin changes them. */
-const RB_SETTINGS = {
+const RB_SETTINGS: Settings = {
   announcement_text: 'Free Delivery Across Bangladesh • Easy Returns • Trusted Products',
   logo_url: '',
   logo_height: 40,
@@ -84,7 +86,7 @@ const RB_SETTINGS = {
 
 /* Hero slideshow — images only, one set per device. Replace these from
    the admin panel; they are stored in hero_slides. */
-function rbHero(device, a, b, label) {
+function rbHero(device: 'desktop' | 'mobile', a: string, b: string, label: string): string {
   const w = device === 'desktop' ? 1600 : 800, h = device === 'desktop' ? 640 : 900;
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${w} ${h}">` +
@@ -98,14 +100,14 @@ function rbHero(device, a, b, label) {
   return 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent(svg);
 }
 
-const RB_HERO = [
+const RB_HERO: HeroSlide[] = [
   { id: 'h1', device: 'desktop', image_url: rbHero('desktop', '#14331F', '#3E7A47', 'Fresh harvest'), alt: 'Fresh harvest', sort: 1, active: true },
   { id: 'h2', device: 'desktop', image_url: rbHero('desktop', '#7A4B10', '#E3A008', 'Honey and ghee'), alt: 'Honey and ghee', sort: 2, active: true },
   { id: 'h3', device: 'mobile',  image_url: rbHero('mobile', '#14331F', '#3E7A47', 'Fresh harvest'), alt: 'Fresh harvest', sort: 1, active: true },
   { id: 'h4', device: 'mobile',  image_url: rbHero('mobile', '#7A4B10', '#E3A008', 'Honey and ghee'), alt: 'Honey and ghee', sort: 2, active: true }
 ];
 
-const RB_PRODUCTS = [
+const RB_PRODUCTS: Product[] = [
   {
     id: 'p01', sku: 'P-1001', slug: 'red-amaranth-lal-shak', name: 'Red Amaranth', name_bn: 'লাল শাক',
     cat: 'vegetables', farm: 'Shapla Organic Farm', origin: 'Savar, Dhaka',
@@ -308,7 +310,7 @@ const RB_PRODUCTS = [
   }
 ];
 
-const RB_COUPONS = [
+const RB_COUPONS: Coupon[] = [
   { code: 'FRESH10', type: 'percent', value: 10, min_subtotal: 800, active: true, note: '10% off orders over ৳800' },
   { code: 'FREEDELIVERY', type: 'shipping', value: 0, min_subtotal: 1000, active: true, note: 'Free delivery over ৳1000' },
   { code: 'NEW150', type: 'flat', value: 150, min_subtotal: 1200, active: true, note: '৳150 off your first order over ৳1200' }

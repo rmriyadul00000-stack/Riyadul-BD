@@ -17,12 +17,20 @@
 import { createClient } from '@supabase/supabase-js';
 import { SUPABASE_URL, SUPABASE_ANON_KEY, HAS_BACKEND } from './config';
 import { probeBackend } from './backend';
-import { RB_SETTINGS, RB_PRODUCTS, RB_CATEGORIES, RB_COUPONS, RB_HERO } from './seed.js';
-import { demoDataset } from './demo.js';
+import { RB_SETTINGS, RB_PRODUCTS, RB_CATEGORIES, RB_COUPONS, RB_HERO } from './seed';
+import { demoDataset } from './demo';
+import type {
+  AdminUser, BackendMode, Category, Coupon, Customer, HeroSlide, InventoryLogEntry, Message, Order,
+  OrderItem, OrderPayload, OrderStatus, PaymentStatus, PlacedOrder, Product, PromoState, Result, Settings, Variant
+} from './types';
 
-/* admin.html sets window.RB_IS_ADMIN = true before this module loads, so
-   the admin session and the shopper session never share a storage key. */
-const IS_ADMIN = Boolean(window.RB_IS_ADMIN);
+type Row = any;   // rows coming from Supabase or localStorage; the public API below is fully typed
+
+/* The admin panel lives under /admin, so its session and the shopper session never
+   share a storage key. */
+/* Decided from the address, not a global flag: bundlers evaluate shared chunks before the app
+   entry, so a flag set by the entry would arrive too late. */
+const IS_ADMIN = typeof location !== 'undefined' && /^\/admin(\.html|\/|$)/.test(location.pathname);
 const sb = HAS_BACKEND
   ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       auth: { storageKey: IS_ADMIN ? 'rb-admin-auth' : 'rb-customer-auth' }
@@ -37,26 +45,26 @@ const sb = HAS_BACKEND
                say so plainly instead of pretending to work. The admin panel
                opens in preview with sample data.
      local   — no keys at all; everything runs on browser storage (dev). */
-let RB_MODE = HAS_BACKEND ? 'live' : 'local';
+let RB_MODE: BackendMode = HAS_BACKEND ? 'live' : 'local';
 let RB_LIVE = false;
 let LS_PREFIX = 'rb.';
 const OFFLINE_MSG = 'Online ordering is paused for a short while. Please call or WhatsApp us and we will take your order by hand.';
 const shopOffline = () => RB_MODE === 'offline' && !IS_ADMIN;
 
-const ok = (data) => ({ ok: true, data });
-const fail = (e) => ({ ok: false, error: (e && e.message) || String(e || 'Something went wrong') });
-const uid = (p) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+const ok = <T>(data: T): Result<T> => ({ ok: true, data });
+const fail = (e: unknown): Result<never> => ({ ok: false, error: String((e && (e as Error).message) || e || 'Something went wrong') });
+const uid = (p: string) => p + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
 
-const RB_DEFAULT_SETTINGS = {
+const RB_DEFAULT_SETTINGS: Settings = {
   announcement_text: '', logo_url: '', logo_height: '40', logo_width: '',
   logo_fit: 'contain', logo_shape: 'none', hotdeals_title: 'Hot Deals', low_stock_threshold: '5'
 };
-const rbSettingsBase = () => ({ ...RB_DEFAULT_SETTINGS, ...RB_SETTINGS });
+const rbSettingsBase = (): Settings => ({ ...RB_DEFAULT_SETTINGS, ...RB_SETTINGS });
 
 /* last catalogue seen while live, so a paused database does not empty the shop */
 const SNAP = {
-  save(k, v) { if (IS_ADMIN) return; try { localStorage.setItem('rb.snap.' + k, JSON.stringify(v)); localStorage.setItem('rb.snap.at', String(Date.now())); } catch {} },
-  get(k) { try { return JSON.parse(localStorage.getItem('rb.snap.' + k) || 'null'); } catch { return null; } },
+  save(k: string, v: unknown) { if (IS_ADMIN) return; try { localStorage.setItem('rb.snap.' + k, JSON.stringify(v)); localStorage.setItem('rb.snap.at', String(Date.now())); } catch {} },
+  get(k: string): Row { try { return JSON.parse(localStorage.getItem('rb.snap.' + k) || 'null'); } catch { return null; } },
   at() { try { return Number(localStorage.getItem('rb.snap.at') || 0); } catch { return 0; } }
 };
 const rbSeed = {
@@ -67,10 +75,71 @@ const rbSeed = {
   settings: () => ({ ...rbSettingsBase(), ...((RB_MODE === 'offline' && SNAP.get('settings')) || {}) })
 };
 
+
+type Dev = 'desktop' | 'mobile';
+export interface RbDb {
+  readonly ready: Promise<BackendMode>;
+  readonly mode: BackendMode;
+  readonly live: boolean;
+  readonly offlineMessage: string;
+
+  categories(includeHidden?: boolean): Promise<Result<Category[]>>;
+  saveCategory(c: Partial<Category>): Promise<Result<Category>>;
+  deleteCategory(id: string): Promise<Result<true>>;
+  hero(device?: Dev, includeHidden?: boolean): Promise<Result<HeroSlide[]>>;
+  saveHeroSlide(s: Partial<HeroSlide>): Promise<Result<HeroSlide>>;
+  deleteHeroSlide(id: string): Promise<Result<true>>;
+  products(includeHidden?: boolean): Promise<Result<Product[]>>;
+  product(slug: string): Promise<Result<Product>>;
+  saveProduct(p: Partial<Product>): Promise<Result<Product>>;
+  deleteProduct(id: string): Promise<Result<true>>;
+  uploadImage(file: File, bucket?: string): Promise<Result<string>>;
+  coupons(includeHidden?: boolean): Promise<Result<Coupon[]>>;
+  validateCoupon(code: string, subtotal: number): Promise<Result<Coupon>>;
+  saveCoupon(c: Partial<Coupon>): Promise<Result<Coupon>>;
+  deleteCoupon(code: string): Promise<Result<true>>;
+  register(a: { email: string; password: string; full_name: string; phone: string }): Promise<Result<unknown>>;
+  login(a: { email: string; password: string }): Promise<Result<unknown>>;
+  logout(): Promise<Result<true>>;
+  me(): Promise<Customer | null>;
+  updateMyAccount(patch: Partial<Customer>): Promise<Result<Customer>>;
+  customers(): Promise<Result<Customer[]>>;
+  customer(id: string): Promise<Result<Customer>>;
+  setCustomerStatus(id: string, status: 'active' | 'blocked'): Promise<Result<true>>;
+  placeOrder(payload: OrderPayload): Promise<Result<PlacedOrder>>;
+  orderItems(orderId: string): Promise<Result<OrderItem[]>>;
+  myOrders(): Promise<Result<Order[]>>;
+  orderByCode(code: string): Promise<Result<Order>>;
+  allOrders(customerId?: string): Promise<Result<Order[]>>;
+  setOrderStatus(id: string, status: OrderStatus): Promise<Result<true>>;
+  setPaymentStatus(id: string, status: PaymentStatus): Promise<Result<true>>;
+  saveMessage(msg: Partial<Message>): Promise<Result<Message>>;
+  messages(): Promise<Result<Message[]>>;
+  deleteMessage(id: string): Promise<Result<true>>;
+  myMessages(): Promise<Result<Message[]>>;
+  sendAccountMessage(text: string): Promise<Result<Message>>;
+  markMyMessagesRead(): Promise<Result<true>>;
+  unreadMessageCount(): Promise<Result<number>>;
+  adminReplyToMessage(customerId: string, text: string): Promise<Result<Message>>;
+  markThreadReadByAdmin(customerId: string): Promise<Result<true>>;
+  markGuestMessageRead(id: string): Promise<Result<true>>;
+  inventoryLog(productId?: string): Promise<Result<InventoryLogEntry[]>>;
+  addInventoryLog(entry: InventoryLogEntry): Promise<Result<true>>;
+  deleteInventoryLog(id: string): Promise<Result<true>>;
+  settings(): Promise<Result<Settings>>;
+  saveSetting(key: string, value: string): Promise<Result<unknown>>;
+  wishlist(): Promise<Result<string[]>>;
+  toggleWishlist(productId: string): Promise<Result<boolean>>;
+  adminLogin(a: { email: string; password: string }): Promise<Result<AdminUser>>;
+  currentAdmin(): Promise<AdminUser | null>;
+}
+type Methods = Omit<RbDb, 'ready' | 'mode' | 'live' | 'offlineMessage'>;
+
 /* ---------- local backend ---------- */
-const LS = {
-  get(k, d) { try { const v = localStorage.getItem(LS_PREFIX + k); return v ? JSON.parse(v) : d; } catch { return d; } },
-  set(k, v) { try { localStorage.setItem(LS_PREFIX + k, JSON.stringify(v)); } catch {} }
+interface LSApi { get(k: string, d: unknown[]): Row[]; get(k: string, d?: Row): Row; set(k: string, v: unknown): void }
+const LS: LSApi = {
+  get(k: string, d?: Row): Row { try { const v = localStorage.getItem(LS_PREFIX + k); return v ? JSON.parse(v) : d; } catch { return d; } },
+  set(k: string, v: unknown) { try { localStorage.setItem(LS_PREFIX + k, JSON.stringify(v)); } catch {} }
 };
 function seedLocal() {
   /* a newer live snapshot replaces the offline copy of the catalogue */
@@ -97,7 +166,7 @@ function seedLocal() {
     LS.set('messages', d.messages); LS.set('seq', d.seq); LS.set('demoSeeded', true);
   }
 }
-function nextCode(kind) {
+function nextCode(kind: 'cust' | 'order') {
   const seq = LS.get('seq', { cust: 10001, order: 10001 });
   const n = seq[kind]++; LS.set('seq', seq);
   return (kind === 'cust' ? 'CUST-' : 'ORD-') + n;
@@ -111,9 +180,9 @@ function nextCode(kind) {
    lives in SQL (rb_promo_active / rb_variant_price) so checkout charges the
    same price the shop displays. */
 const RB_COST_KEYS = ['cost', 'cost_transport', 'cost_packaging', 'cost_labor', 'cost_storage', 'cost_other'];
-function rbUnitCost(v) { return RB_COST_KEYS.reduce((s, k) => s + (Number(v && v[k]) || 0), 0); }
+function rbUnitCost(v?: Partial<Variant> | null): number { return RB_COST_KEYS.reduce((s, k) => s + (Number(v && (v as Row)[k]) || 0), 0); }
 /* 'none' | 'scheduled' | 'active' | 'expired' */
-function rbPromoState(p, now) {
+function rbPromoState(p: Pick<Product, 'variants' | 'promo_start' | 'promo_end'>, now?: number): PromoState {
   now = now || Date.now();
   if (!(p.variants || []).some(v => Number(v.promo_price) > 0)) return 'none';
   const s = p.promo_start ? Date.parse(p.promo_start) : null;
@@ -122,11 +191,11 @@ function rbPromoState(p, now) {
   if (e && now > e) return 'expired';
   return 'active';
 }
-function rbEffPrice(p, v, now) {
+function rbEffPrice(p: Pick<Product, 'variants' | 'promo_start' | 'promo_end'>, v: Variant, now?: number): number {
   return (rbPromoState(p, now) === 'active' && Number(v.promo_price) > 0) ? Number(v.promo_price) : Number(v.price) || 0;
 }
 /* what a shopper should see right now */
-function rbResolveForShop(p) {
+function rbResolveForShop(p: Product): Product {
   const state = rbPromoState(p);
   const out = { ...p, promo_state: state };
   if (state === 'active') {
@@ -138,7 +207,7 @@ function rbResolveForShop(p) {
   return out;
 }
 
-function rowToProduct(r) {
+function rowToProduct(r: Row): Product {
   return {
     id: r.id, sku: r.sku, slug: r.slug, name: r.name, name_bn: r.name_bn, cat: r.cat,
     category_id: r.category_id, farm: r.farm, origin: r.origin,
@@ -156,13 +225,13 @@ function rowToProduct(r) {
    category_id already sat on the row, which is why an admin's category
    change looked saved but reverted on refresh. `sku` is assigned by the
    database sequence and never sent back up on save. */
-const productToRow = (p) => ({
+const productToRow = (p: Partial<Product>) => ({
   slug: p.slug, name: p.name, name_bn: p.name_bn || null, cat: p.cat,
   category_id: p.category_id || null, farm: p.farm || null, origin: p.origin || null,
   variants: p.variants || [], images: p.images || [],
   certified: !!p.certified, featured: !!p.featured, active: p.active !== false,
   hot_deal: !!p.hot_deal, hot_deal_sort: p.hot_deal_sort || 0,
-  discount_pct: p.discount_pct == null || p.discount_pct === '' ? null : Number(p.discount_pct),
+  discount_pct: p.discount_pct == null || (p.discount_pct as unknown) === '' ? null : Number(p.discount_pct),
   description: p.description || '', benefits: p.benefits || [], storage_tip: p.storage_tip || '',
   /* only sent when present, so the panel still saves before the pending SQL has been run */
   ...(p.promo_start !== undefined ? { promo_start: p.promo_start || null } : {}),
@@ -172,11 +241,11 @@ const productToRow = (p) => ({
 
 /* stock follows cancellation both ways: cancelling returns the units,
    re-opening a cancelled order takes them again */
-function localRestock(order, sign) {
+function localRestock(order: Row, sign: 1 | -1) {
   const products = LS.get('products', []), log = LS.get('inventory_log', []);
   LS.get('order_items', []).filter(i => i.order_id === order.id).forEach(i => {
     const p = products.find(x => x.id === i.product_id);
-    const v = p && (p.variants || []).find(x => x.label === i.variant_label);
+    const v = p && (p.variants || []).find((x: Row) => x.label === i.variant_label);
     if (!v) return;
     v.stock = Math.max(0, (Number(v.stock) || 0) + sign * i.qty);
     log.unshift({
@@ -188,8 +257,7 @@ function localRestock(order, sign) {
   LS.set('products', products); LS.set('inventory_log', log);
 }
 
-const impl = {
-  client: sb,
+const impl: Methods & ThisType<Methods> = {
 
   /* ===================== CATEGORIES ===================== */
   async categories(includeHidden = false) {
@@ -197,7 +265,7 @@ const impl = {
       const all = LS.get('categories', []).slice().sort((a, b) => (a.sort || 0) - (b.sort || 0));
       return ok(includeHidden ? all : all.filter(c => c.active !== false));
     }
-    let q = sb.from('categories').select('*').order('sort');
+    let q = sb!.from('categories').select('*').order('sort');
     if (!includeHidden) q = q.eq('active', true);
     const { data, error } = await q;
     if (!error && !includeHidden) SNAP.save('categories', data);
@@ -218,13 +286,13 @@ const impl = {
       sort: c.sort || 0, active: c.active !== false
     };
     const { data, error } = c.id
-      ? await sb.from('categories').update(row).eq('id', c.id).select().single()
-      : await sb.from('categories').insert([row]).select().single();
+      ? await sb!.from('categories').update(row).eq('id', c.id).select().single()
+      : await sb!.from('categories').insert([row]).select().single();
     return error ? fail(error) : ok(data);
   },
   async deleteCategory(id) {
     if (!RB_LIVE) { LS.set('categories', LS.get('categories', []).filter(c => c.id !== id)); return ok(true); }
-    const { error } = await sb.from('categories').delete().eq('id', id);
+    const { error } = await sb!.from('categories').delete().eq('id', id);
     return error ? fail(error) : ok(true);
   },
 
@@ -235,7 +303,7 @@ const impl = {
       if (device) all = all.filter(h => h.device === device);
       return ok(includeHidden ? all : all.filter(h => h.active !== false));
     }
-    let q = sb.from('hero_slides').select('*').order('sort');
+    let q = sb!.from('hero_slides').select('*').order('sort');
     if (device) q = q.eq('device', device);
     if (!includeHidden) q = q.eq('active', true);
     const { data, error } = await q;
@@ -251,13 +319,13 @@ const impl = {
     }
     const row = { device: s.device, image_url: s.image_url, alt: s.alt || null, sort: s.sort || 0, active: s.active !== false };
     const { data, error } = s.id
-      ? await sb.from('hero_slides').update(row).eq('id', s.id).select().single()
-      : await sb.from('hero_slides').insert([row]).select().single();
+      ? await sb!.from('hero_slides').update(row).eq('id', s.id).select().single()
+      : await sb!.from('hero_slides').insert([row]).select().single();
     return error ? fail(error) : ok(data);
   },
   async deleteHeroSlide(id) {
     if (!RB_LIVE) { LS.set('hero', LS.get('hero', []).filter(h => h.id !== id)); return ok(true); }
-    const { error } = await sb.from('hero_slides').delete().eq('id', id);
+    const { error } = await sb!.from('hero_slides').delete().eq('id', id);
     return error ? fail(error) : ok(true);
   },
 
@@ -268,7 +336,7 @@ const impl = {
       const list = includeHidden ? all : all.filter(p => p.active !== false);
       return ok(IS_ADMIN ? list : list.map(rbResolveForShop));
     }
-    let q = sb.from('products').select('*').order('created_at', { ascending: false });
+    let q = sb!.from('products').select('*').order('created_at', { ascending: false });
     if (!includeHidden) q = q.eq('active', true);
     const { data, error } = await q;
     if (error) return fail(error);
@@ -281,7 +349,7 @@ const impl = {
       const p = LS.get('products', []).find(x => x.slug === slug || x.id === slug);
       return p ? ok(IS_ADMIN ? p : rbResolveForShop(p)) : fail('That product is no longer listed.');
     }
-    const { data, error } = await sb.from('products').select('*').eq('slug', slug).single();
+    const { data, error } = await sb!.from('products').select('*').eq('slug', slug).single();
     if (error) return fail(error);
     return ok(IS_ADMIN ? rowToProduct(data) : rbResolveForShop(rowToProduct(data)));
   },
@@ -293,38 +361,38 @@ const impl = {
         const nextSku = 'P-' + (1000 + all.length + 1);
         all.unshift({ ...p, id: uid('p'), sku: p.sku || nextSku });
       }
-      LS.set('products', all); return ok(p);
+      LS.set('products', all); return ok(p as Product);
     }
     /* Always resolve category_id fresh from the chosen slug so the two
        never disagree — see the note on productToRow above. */
-    const { data: catRow } = await sb.from('categories').select('id').eq('slug', p.cat).maybeSingle();
+    const { data: catRow } = await sb!.from('categories').select('id').eq('slug', p.cat).maybeSingle();
     const row = productToRow({ ...p, category_id: catRow ? catRow.id : null });
     const { data, error } = p.id
-      ? await sb.from('products').update(row).eq('id', p.id).select().single()
-      : await sb.from('products').insert([row]).select().single();
+      ? await sb!.from('products').update(row).eq('id', p.id).select().single()
+      : await sb!.from('products').insert([row]).select().single();
     return error ? fail(error) : ok(rowToProduct(data));
   },
   async deleteProduct(id) {
     if (!RB_LIVE) { LS.set('products', LS.get('products', []).filter(p => p.id !== id)); return ok(true); }
-    const { error } = await sb.from('products').delete().eq('id', id);
+    const { error } = await sb!.from('products').delete().eq('id', id);
     return error ? fail(error) : ok(true);
   },
 
   /* ===================== STORAGE ===================== */
   async uploadImage(file, bucket = 'product-media') {
     if (!RB_LIVE) {
-      const dataUrl = await new Promise((res, rej) => {
+      const dataUrl = await new Promise<string>((res, rej) => {
         const r = new FileReader();
-        r.onload = () => res(r.result);
+        r.onload = () => res(String(r.result));
         r.onerror = () => rej(new Error('Could not read that file'));
         r.readAsDataURL(file);
       });
       return ok(dataUrl);
     }
     const path = `${uid('')}-${file.name.replace(/[^\w.-]/g, '_')}`;
-    const { error } = await sb.storage.from(bucket).upload(path, file, { upsert: true });
+    const { error } = await sb!.storage.from(bucket).upload(path, file, { upsert: true });
     if (error) return fail(error);
-    return ok(sb.storage.from(bucket).getPublicUrl(path).data.publicUrl);
+    return ok(sb!.storage.from(bucket).getPublicUrl(path).data.publicUrl);
   },
 
   /* ===================== COUPONS ===================== */
@@ -333,7 +401,7 @@ const impl = {
       const all = LS.get('coupons', []);
       return ok(includeHidden ? all : all.filter(c => c.active !== false));
     }
-    let q = sb.from('coupons').select('*');
+    let q = sb!.from('coupons').select('*');
     if (!includeHidden) q = q.eq('active', true);
     const { data, error } = await q;
     return error ? fail(error) : ok(data);
@@ -353,12 +421,12 @@ const impl = {
       if (i > -1) all[i] = { ...all[i], ...c }; else all.push(c);
       LS.set('coupons', all); return ok(c);
     }
-    const { data, error } = await sb.from('coupons').upsert(c, { onConflict: 'code' }).select().single();
+    const { data, error } = await sb!.from('coupons').upsert(c, { onConflict: 'code' }).select().single();
     return error ? fail(error) : ok(data);
   },
   async deleteCoupon(code) {
     if (!RB_LIVE) { LS.set('coupons', LS.get('coupons', []).filter(c => c.code !== code)); return ok(true); }
-    const { error } = await sb.from('coupons').delete().eq('code', code);
+    const { error } = await sb!.from('coupons').delete().eq('code', code);
     return error ? fail(error) : ok(true);
   },
 
@@ -376,7 +444,7 @@ const impl = {
       all.push(c); LS.set('customers', all); LS.set('session', c.id);
       return ok(c);
     }
-    const { data, error } = await sb.auth.signUp({ email, password, options: { data: { full_name, phone } } });
+    const { data, error } = await sb!.auth.signUp({ email, password, options: { data: { full_name, phone } } });
     return error ? fail(error) : ok(data.user);
   },
   async login({ email, password }) {
@@ -387,12 +455,12 @@ const impl = {
       if (c.status === 'blocked') return fail('This account has been blocked. Contact the shop.');
       LS.set('session', c.id); return ok(c);
     }
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    const { data, error } = await sb!.auth.signInWithPassword({ email, password });
     return error ? fail(error) : ok(data.user);
   },
   async logout() {
     if (!RB_LIVE) { LS.set('session', null); return ok(true); }
-    await sb.auth.signOut(); return ok(true);
+    await sb!.auth.signOut(); return ok(true);
   },
 
   /* The signed-in customer's permanent account row — never the contact
@@ -402,9 +470,9 @@ const impl = {
       const id = LS.get('session', null);
       return id ? (LS.get('customers', []).find(c => c.id === id) || null) : null;
     }
-    const { data } = await sb.auth.getUser();
+    const { data } = await sb!.auth.getUser();
     if (!data || !data.user) return null;
-    const { data: row } = await sb.from('customers').select('*').eq('user_id', data.user.id).maybeSingle();
+    const { data: row } = await sb!.from('customers').select('*').eq('user_id', data.user.id).maybeSingle();
     return row || { id: null, email: data.user.email, full_name: '', phone: '' };
   },
   async updateMyAccount(patch) {
@@ -417,7 +485,7 @@ const impl = {
     }
     const me = await this.me();
     if (!me || !me.id) return fail('You are signed out. Sign in and try again.');
-    const { data, error } = await sb.from('customers').update(patch).eq('id', me.id).select().single();
+    const { data, error } = await sb!.from('customers').update(patch).eq('id', me.id).select().single();
     return error ? fail(error) : ok(data);
   },
 
@@ -435,15 +503,16 @@ const impl = {
         };
       }));
     }
-    const { data, error } = await sb.from('customer_overview').select('*').order('created_at', { ascending: false });
+    const { data, error } = await sb!.from('customer_overview').select('*').order('created_at', { ascending: false });
     return error ? fail(error) : ok(data);
   },
   async customer(id) {
     if (!RB_LIVE) {
-      const c = (await this.customers()).data.find(x => x.id === id);
+      const all = await this.customers();
+      const c = all.ok ? all.data.find(x => x.id === id) : undefined;
       return c ? ok(c) : fail('No customer with that ID.');
     }
-    const { data, error } = await sb.from('customer_overview').select('*').eq('id', id).single();
+    const { data, error } = await sb!.from('customer_overview').select('*').eq('id', id).single();
     return error ? fail(error) : ok(data);
   },
   async setCustomerStatus(id, status) {
@@ -453,7 +522,7 @@ const impl = {
       if (i > -1) { all[i].status = status; LS.set('customers', all); }
       return ok(true);
     }
-    const { error } = await sb.from('customers').update({ status }).eq('id', id);
+    const { error } = await sb!.from('customers').update({ status }).eq('id', id);
     return error ? fail(error) : ok(true);
   },
 
@@ -471,7 +540,7 @@ const impl = {
       for (const it of payload.items) {
         const p = products.find(x => x.id === it.product_id);
         if (!p) return fail('A product in the basket is no longer available.');
-        const v = (p.variants || []).find(x => x.label === it.variant_label);
+        const v = (p.variants || []).find((x: Row) => x.label === it.variant_label);
         if (!v) return fail('That size is no longer sold: ' + it.variant_label);
         if (it.qty > (v.stock || 0)) return fail(`Only ${v.stock} left of ${p.name} (${v.label}).`);
         const price = rbEffPrice(p, v), cost = rbUnitCost(v);
@@ -488,7 +557,7 @@ const impl = {
       let discount = 0, coupon_code = null;
       if (payload.coupon_code) {
         const c = LS.get('coupons', []).find(x =>
-          x.code.toUpperCase() === payload.coupon_code.toUpperCase() && x.active !== false);
+          x.code.toUpperCase() === String(payload.coupon_code).toUpperCase() && x.active !== false);
         if (c && subtotal >= (c.min_subtotal || 0)) {
           coupon_code = c.code;
           if (c.type === 'percent') discount = Math.round(subtotal * c.value / 100);
@@ -522,7 +591,7 @@ const impl = {
       return ok({ order_id: order.id, order_code: order.order_code, total: order.total });
     }
 
-    const { data, error } = await sb.rpc('place_order', { payload });
+    const { data, error } = await sb!.rpc('place_order', { payload });
     if (error) return fail(error);
     const row = Array.isArray(data) ? data[0] : data;
     fetch('/.netlify/functions/send-order-email', {
@@ -534,7 +603,7 @@ const impl = {
 
   async orderItems(orderId) {
     if (!RB_LIVE) return ok(LS.get('order_items', []).filter(i => i.order_id === orderId));
-    const { data, error } = await sb.from('order_items').select('*').eq('order_id', orderId);
+    const { data, error } = await sb!.from('order_items').select('*').eq('order_id', orderId);
     return error ? fail(error) : ok(data);
   },
 
@@ -549,7 +618,7 @@ const impl = {
         .filter(o => o.customer_id === me.id)
         .map(o => ({ ...o, items: items.filter(i => i.order_id === o.id) })));
     }
-    const { data, error } = await sb.from('orders')
+    const { data, error } = await sb!.from('orders')
       .select('*, order_items(*)').order('placed_at', { ascending: false });
     return error ? fail(error) : ok(data.map(o => ({ ...o, items: o.order_items || [] })));
   },
@@ -560,7 +629,7 @@ const impl = {
       if (!o) return fail('No order found with that number.');
       return ok({ ...o, items: LS.get('order_items', []).filter(i => i.order_id === o.id) });
     }
-    const { data, error } = await sb.rpc('track_order', { p_code: code });
+    const { data, error } = await sb!.rpc('track_order', { p_code: code });
     if (error) return fail(error);
     if (!data) return fail('No order found with that number.');
     return ok(data);
@@ -581,7 +650,7 @@ const impl = {
         })() : null
       })));
     }
-    let q = sb.from('orders').select('*, order_items(*), customers(customer_code, full_name)')
+    let q = sb!.from('orders').select('*, order_items(*), customers(customer_code, full_name)')
       .order('placed_at', { ascending: false });
     if (customerId) q = q.eq('customer_id', customerId);
     const { data, error } = await q;
@@ -596,13 +665,13 @@ const impl = {
         const was = all[i].status;
         if ((was === 'cancelled') !== (status === 'cancelled')) localRestock(all[i], status === 'cancelled' ? 1 : -1);
         all[i].status = status;
-        const stamp = { confirmed: 'confirmed_at', shipped: 'shipped_at', delivered: 'delivered_at', cancelled: 'cancelled_at' }[status];
+        const stamp = ({ confirmed: 'confirmed_at', shipped: 'shipped_at', delivered: 'delivered_at', cancelled: 'cancelled_at' } as Record<string, string>)[status];
         if (stamp && !all[i][stamp]) all[i][stamp] = new Date().toISOString();
         LS.set('orders', all);
       }
       return ok(true);
     }
-    const { error } = await sb.from('orders').update({ status }).eq('id', id);
+    const { error } = await sb!.from('orders').update({ status }).eq('id', id);
     return error ? fail(error) : ok(true);
   },
 
@@ -613,7 +682,7 @@ const impl = {
       if (i > -1) { all[i].payment_status = payment_status; LS.set('orders', all); }
       return ok(true);
     }
-    const { error } = await sb.from('orders').update({ payment_status }).eq('id', id);
+    const { error } = await sb!.from('orders').update({ payment_status }).eq('id', id);
     return error ? fail(error) : ok(true);
   },
 
@@ -630,17 +699,17 @@ const impl = {
       const record = { ...payload, id: uid('m'), created_at: new Date().toISOString() };
       const all = LS.get('messages', []); all.unshift(record); LS.set('messages', all); return ok(record);
     }
-    const { data, error } = await sb.from('messages').insert([payload]).select().single();
+    const { data, error } = await sb!.from('messages').insert([payload]).select().single();
     return error ? fail(error) : ok(data);
   },
   async messages() {
     if (!RB_LIVE) return ok(LS.get('messages', []));
-    const { data, error } = await sb.from('messages').select('*').order('created_at', { ascending: false });
+    const { data, error } = await sb!.from('messages').select('*').order('created_at', { ascending: false });
     return error ? fail(error) : ok(data);
   },
   async deleteMessage(id) {
     if (!RB_LIVE) { LS.set('messages', LS.get('messages', []).filter(m => m.id !== id)); return ok(true); }
-    const { error } = await sb.from('messages').delete().eq('id', id);
+    const { error } = await sb!.from('messages').delete().eq('id', id);
     return error ? fail(error) : ok(true);
   },
 
@@ -648,8 +717,8 @@ const impl = {
   async myMessages() {
     const me = await this.me();
     if (!me || !me.id) return ok([]);
-    if (!RB_LIVE) return ok(LS.get('messages', []).filter(m => m.customer_id === me.id).sort((a, b) => new Date(a.created_at) - new Date(b.created_at)));
-    const { data, error } = await sb.from('messages').select('*').eq('customer_id', me.id).order('created_at', { ascending: true });
+    if (!RB_LIVE) return ok(LS.get('messages', []).filter(m => m.customer_id === me.id).sort((a, b) => +new Date(a.created_at) - +new Date(b.created_at)));
+    const { data, error } = await sb!.from('messages').select('*').eq('customer_id', me.id).order('created_at', { ascending: true });
     return error ? fail(error) : ok(data);
   },
   /* A reply (or a fresh message) sent from inside the account page, as
@@ -662,7 +731,7 @@ const impl = {
       const record = { ...payload, id: uid('m'), created_at: new Date().toISOString() };
       const all = LS.get('messages', []); all.unshift(record); LS.set('messages', all); return ok(record);
     }
-    const { data, error } = await sb.from('messages').insert([payload]).select().single();
+    const { data, error } = await sb!.from('messages').insert([payload]).select().single();
     return error ? fail(error) : ok(data);
   },
   async markMyMessagesRead() {
@@ -672,7 +741,7 @@ const impl = {
       LS.set('messages', LS.get('messages', []).map(m => (m.customer_id === me.id && m.sender === 'admin') ? { ...m, read_by_customer: true } : m));
       return ok(true);
     }
-    const { error } = await sb.from('messages').update({ read_by_customer: true }).eq('customer_id', me.id).eq('sender', 'admin').eq('read_by_customer', false);
+    const { error } = await sb!.from('messages').update({ read_by_customer: true }).eq('customer_id', me.id).eq('sender', 'admin').eq('read_by_customer', false);
     return error ? fail(error) : ok(true);
   },
   /* For the little badge on the Account icon in the header. */
@@ -680,7 +749,7 @@ const impl = {
     const me = await this.me();
     if (!me || !me.id) return ok(0);
     if (!RB_LIVE) return ok(LS.get('messages', []).filter(m => m.customer_id === me.id && m.sender === 'admin' && !m.read_by_customer).length);
-    const { count, error } = await sb.from('messages').select('id', { count: 'exact', head: true }).eq('customer_id', me.id).eq('sender', 'admin').eq('read_by_customer', false);
+    const { count, error } = await sb!.from('messages').select('id', { count: 'exact', head: true }).eq('customer_id', me.id).eq('sender', 'admin').eq('read_by_customer', false);
     return error ? fail(error) : ok(count || 0);
   },
 
@@ -691,7 +760,7 @@ const impl = {
       const record = { ...payload, id: uid('m'), created_at: new Date().toISOString() };
       const all = LS.get('messages', []); all.unshift(record); LS.set('messages', all); return ok(record);
     }
-    const { data, error } = await sb.from('messages').insert([payload]).select().single();
+    const { data, error } = await sb!.from('messages').insert([payload]).select().single();
     return error ? fail(error) : ok(data);
   },
   async markThreadReadByAdmin(customerId) {
@@ -699,12 +768,12 @@ const impl = {
       LS.set('messages', LS.get('messages', []).map(m => m.customer_id === customerId ? { ...m, read_by_admin: true } : m));
       return ok(true);
     }
-    const { error } = await sb.from('messages').update({ read_by_admin: true }).eq('customer_id', customerId).eq('read_by_admin', false);
+    const { error } = await sb!.from('messages').update({ read_by_admin: true }).eq('customer_id', customerId).eq('read_by_admin', false);
     return error ? fail(error) : ok(true);
   },
   async markGuestMessageRead(id) {
     if (!RB_LIVE) { LS.set('messages', LS.get('messages', []).map(m => m.id === id ? { ...m, read_by_admin: true } : m)); return ok(true); }
-    const { error } = await sb.from('messages').update({ read_by_admin: true }).eq('id', id);
+    const { error } = await sb!.from('messages').update({ read_by_admin: true }).eq('id', id);
     return error ? fail(error) : ok(true);
   },
 
@@ -714,7 +783,7 @@ const impl = {
       const all = LS.get('inventory_log', []);
       return ok(productId ? all.filter(x => x.product_id === productId) : all);
     }
-    let q = sb.from('inventory_log').select('*').order('created_at', { ascending: false }).limit(5000);
+    let q = sb!.from('inventory_log').select('*').order('created_at', { ascending: false }).limit(5000);
     if (productId) q = q.eq('product_id', productId);
     const { data, error } = await q;
     return error ? fail(error) : ok(data || []);
@@ -731,12 +800,12 @@ const impl = {
       all.unshift({ ...row, id: uid('lg'), created_at: new Date().toISOString() });
       LS.set('inventory_log', all); return ok(true);
     }
-    const { error } = await sb.from('inventory_log').insert([row]);
+    const { error } = await sb!.from('inventory_log').insert([row]);
     return error ? fail(error) : ok(true);
   },
   async deleteInventoryLog(id) {
     if (!RB_LIVE) { LS.set('inventory_log', LS.get('inventory_log', []).filter(x => x.id !== id)); return ok(true); }
-    const { error } = await sb.from('inventory_log').delete().eq('id', id);
+    const { error } = await sb!.from('inventory_log').delete().eq('id', id);
     return error ? fail(error) : ok(true);
   },
 
@@ -746,7 +815,7 @@ const impl = {
      even before anything has been saved. */
   async settings() {
     if (!RB_LIVE) return ok({ ...rbSettingsBase(), ...LS.get('settings', {}) });
-    const { data, error } = await sb.from('site_settings').select('key, value');
+    const { data, error } = await sb!.from('site_settings').select('key, value');
     if (error) return fail(error);
     const map = { ...rbSettingsBase() };
     (data || []).forEach(r => { if (r.value !== null) map[r.key] = r.value; });
@@ -758,7 +827,7 @@ const impl = {
       const s = LS.get('settings', { ...rbSettingsBase() });
       s[key] = value; LS.set('settings', s); return ok(s);
     }
-    const { error } = await sb.from('site_settings').upsert({ key, value }, { onConflict: 'key' });
+    const { error } = await sb!.from('site_settings').upsert({ key, value }, { onConflict: 'key' });
     return error ? fail(error) : ok(true);
   },
 
@@ -767,18 +836,19 @@ const impl = {
     if (!RB_LIVE) return ok(LS.get('wishlist', []));
     const me = await this.me();
     if (!me || !me.id) return ok(LS.get('wishlist', []));
-    const { data, error } = await sb.from('wishlist').select('product_id');
+    const { data, error } = await sb!.from('wishlist').select('product_id');
     return error ? fail(error) : ok(data.map(r => r.product_id));
   },
   async toggleWishlist(productId) {
-    const cur = (await this.wishlist()).data || [];
+    const wl = await this.wishlist();
+    const cur = wl.ok ? wl.data : [];
     const on = cur.includes(productId);
-    LS.set('wishlist', on ? cur.filter(id => id !== productId) : [...cur, productId]);
+    LS.set('wishlist', on ? cur.filter((id: string) => id !== productId) : [...cur, productId]);
     if (RB_LIVE) {
       const me = await this.me();
       if (me && me.id) {
-        if (on) await sb.from('wishlist').delete().eq('product_id', productId);
-        else await sb.from('wishlist').insert([{ product_id: productId }]);
+        if (on) await sb!.from('wishlist').delete().eq('product_id', productId);
+        else await sb!.from('wishlist').insert([{ product_id: productId }]);
       }
     }
     return ok(!on);
@@ -789,17 +859,17 @@ const impl = {
      passcode, and no admin list anywhere in the browser code. */
   async adminLogin({ email, password }) {
     if (!RB_LIVE) return fail('The database is not connected.');
-    const { data, error } = await sb.auth.signInWithPassword({ email, password });
+    const { data, error } = await sb!.auth.signInWithPassword({ email, password });
     if (error) return fail(error);
-    const { data: row } = await sb.from('admins').select('email, name').eq('user_id', data.user.id).maybeSingle();
-    if (!row) { await sb.auth.signOut(); return fail('That account is not an admin of this shop.'); }
+    const { data: row } = await sb!.from('admins').select('email, name').eq('user_id', data.user.id).maybeSingle();
+    if (!row) { await sb!.auth.signOut(); return fail('That account is not an admin of this shop.'); }
     return ok(row);
   },
   async currentAdmin() {
     if (!RB_LIVE) return null;
-    const { data } = await sb.auth.getUser();
+    const { data } = await sb!.auth.getUser();
     if (!data || !data.user) return null;
-    const { data: row } = await sb.from('admins').select('email, name').eq('user_id', data.user.id).maybeSingle();
+    const { data: row } = await sb!.from('admins').select('email, name').eq('user_id', data.user.id).maybeSingle();
     return row || null;
   }
 };
@@ -814,22 +884,22 @@ const ready = (async () => {
   return RB_MODE;
 })();
 
-const RB_DB = new Proxy(impl, {
-  get(target, key) {
+export const RB_DB: RbDb = new Proxy(impl as unknown as RbDb, {
+  get(target, key: string) {
     if (key === 'ready') return ready;
     if (key === 'mode') return RB_MODE;
     if (key === 'live') return RB_LIVE;
     if (key === 'offlineMessage') return OFFLINE_MSG;
-    const v = target[key];
+    const v = (target as Row)[key];
     if (typeof v !== 'function') return v;
-    return async (...args) => { await ready; return v.apply(RB_DB, args); };
+    return async (...args: unknown[]) => { await ready; return v.apply(RB_DB, args); };
   }
 });
 
 /* wipe the browser-only preview data (admin preview "Reset sample data") */
-export function resetLocalData() {
+export function resetLocalData(): void {
   Object.keys(localStorage).filter(k => k.startsWith(LS_PREFIX) && !k.startsWith('rb.snap.')).forEach(k => localStorage.removeItem(k));
 }
 
-window.RB_DB = RB_DB;
-export { RB_DB, RB_COST_KEYS, rbUnitCost, rbPromoState, rbEffPrice, rbResolveForShop };
+(window as Row).RB_DB = RB_DB;
+export { RB_COST_KEYS, rbUnitCost, rbPromoState, rbEffPrice, rbResolveForShop };
